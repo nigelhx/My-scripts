@@ -1,0 +1,459 @@
+SELECT * FROM DBA_SQL_PLAN_BASELINES
+
+SPM既能够主动的稳定执行计划，又保留了继续使用新的执行效率更高的执行计划的机会
+启用SPM后，每一个SQL都会存在对应的SQL PLAN Baseline，存储在DBA_SQL_PLAN_BASELINES视图。
+
+数optimizer_capture_sql_plan_baselines用于控制是否开启自动捕获，默认为false。
+参数optimizer_use_sql_plan_baselines用于控制是否启用SPM，默认为TRUE，表示默认情况下Oracle在生成执行计划时就会启用SPM，使用已有的SQL PLAN Baseline。
+
+DECLARE
+V_NUM  INTEGER;
+BEGIN
+   V_NUM:=dbms_spm.drop_sql_plan_baseline(sql_handle=>'SQL_202663973ac6fa14');----DELETE SPM
+   DBMS_OUTPUT.PUT_LINE(V_NUM);
+END;
+/
+
+
+http://cache.baiducontent.com/c?m=9f65cb4a8c8507ed4fece763105d842d4a0fc7743ca0804b22818448e4635810013bf4bb50734d5bcec0766502a94d57f7f33378370427b486dccd179ded9d756fdb766a270b863011d04cb8cb3732b653f24d9ea40ee0cce733e3ef908c&p=8b2a971da49211a058e6c966500a&newp=8f769a47999d33e508e294754d4e92695803ed6038d3d401298ffe0cc4241a1a1a3aecbf21241b0ed5c7776300a84a59e1f13d77340234f1f689df08d2ecce7e60d6557e&user=baidu&fm=sc&query=ORACLE+11g+%EAP%E9%5DSPM&qid=da657c9b00012160&p1=10
+
+
+-----BEGEIN CREATE SPM FOR SPECIAL SQL STATEMENT 
+---EXPLAM LET BELOW SQL RUNNING WIHT INDEX SCAN(COL TEMP_01 HAVE ONE INDEX)
+---SELECT /*+ FULL(A) */  * FROM ZY_TEST_01 WHERE TEMP_01='2013/05/14'
+
+---FIRST GENERATE  SQL PLAN BASELINES
+
+
+SELECT /*+ FULL(ZY_TEST_01) */  * FROM ZY_TEST_01 WHERE TEMP_01='2013/05/14'
+
+
+select * from V$sqlarea where sql_TEXT='SELECT /*+ FULL(ZY_TEST_01) */  * FROM ZY_TEST_01 WHERE TEMP_01=''2013/05/14'''
+
+
+174y2jq3p08gp  2270175733
+
+
+select * from V$sql_plan where sql_id='5q4gh80a7c4f4'
+
+DECLARE
+V_NUM  INTEGER;
+BEGIN
+   V_NUM:=DBMS_SPM.LOAD_PLANS_FROM_CURSOR_CACHE(SQL_ID=>'5q4gh80a7c4f4',plan_hash_value=>'3732906974');
+   DBMS_OUTPUT.PUT_LINE(V_NUM);
+END;
+/
+
+SELECT * FROM DBA_SQL_PLAN_BASELINES
+
+   - SQL plan baseline "SQL_PLAN_7gg63mv70mgwf3e9e584c" used for this statement
+                                "SQL_PLAN_7gg63mv70mgwf3e9e584c"
+
+explain plan for
+SELECT /*+ FULL(ZY_TEST_01) */  * FROM ZY_TEST_01 WHERE TEMP_01='2013/05/14'
+
+select * from table(dbms_xplan.display)
+
+---So SPM have been used by this sql,now let this sql running with index scan
+
+
+SELECT /*+ index(ZY_TEST_01  test_zy) */  * FROM ZY_TEST_01 WHERE TEMP_01='2013/05/14'
+
+
+select * from V$sqlarea where sql_TEXT='SELECT /*+ index(ZY_TEST_01  test_zy) */  * FROM ZY_TEST_01 WHERE TEMP_01=''2013/05/14'''
+
+select * from V$sql_plan where sql_id='a3u8d57jdrzxu'
+
+
+SELECT * FROM DBA_SQL_PLAN_BASELINES where sql_handle='SQL_77bcc39ece09bf8e'
+
+
+DECLARE
+V_NUM  INTEGER;
+BEGIN
+   V_NUM:=dbms_spm.load_plans_from_cursor_cache(SQL_iD => 'a3u8d57jdrzxu',plan_hash_value => 748882436,sql_handle => 'SQL_77bcc39ece09bf8e');
+   DBMS_OUTPUT.PUT_LINE(V_NUM);
+END;
+/
+
+
+explain plan for
+SELECT /*+ FULL(ZY_TEST_01) */  * FROM ZY_TEST_01 WHERE TEMP_01='2013/05/14'
+
+select * from table(dbms_xplan.display)
+
+------disable full scan SPM
+
+DECLARE
+V_NUM  INTEGER;
+BEGIN
+   V_NUM:=DBMS_SPM.ALTER_SQL_PLAN_BASELINE(sql_handle=>'SQL_77bcc39ece09bf8e',plan_name=>'SQL_PLAN_7gg63mv70mgwf3e9e584c',attribute_name=>'ENABLED',attribute_value=>'YES');
+   DBMS_OUTPUT.PUT_LINE(V_NUM);
+END;
+/
+
+
+
+SELECT * FROM SYS.SQLOBJ$DATA A,DBA_SQL_PLAN_BASELINES B
+WHERE A.SIGNATURE=B.SIGNATURE AND sql_handle='SQL_77bcc39ece09bf8e'
+
+
+SELECT * FROM SYS.sqlobj$auxdata A,DBA_SQL_PLAN_BASELINES B
+WHERE A.SIGNATURE=B.SIGNATURE AND sql_handle='SQL_77bcc39ece09bf8e'
+
+---delete full scan spm information
+
+SQL_PLAN_7gg63mv70mgwf3e9e584c
+
+
+
+DECLARE
+V_NUM  INTEGER;
+BEGIN
+   V_NUM:=dbms_spm.drop_sql_plan_baseline(sql_handle=>'SQL_77bcc39ece09bf8e',plan_name=>'SQL_PLAN_7gg63mv70mgwf3e9e584c');----DELETE SPM
+   DBMS_OUTPUT.PUT_LINE(V_NUM);
+END;
+/
+
+11g推出的SPM是一种主动的稳定执行计划的手段，能够保证只有被验证过的执行计划才会被启用。SPM既能够主动的稳定执行计划，又保留了继续使用新的执行效率更高的执行计划的机会。
+
+  启用SPM后，每一个SQL都会存在对应的SQL PLAN Baseline，存储在DBA_SQL_PLAN_BASELINES视图。
+
+该视图的enable和accept列均为YES的SQL PLAN Baseline所对应的执行计划才会被执行。如果有超过1个以上的均为YES，那么oracle会选择其中cost值最小的为执行计划。
+
+  可以有2种方法产生SQL PLAN Baseline
+
+1.自动捕获
+
+2.手动生成/批量导入
+
+  下面先介绍自动捕获。参数optimizer_capture_sql_plan_baselines用于控制是否开启自动捕获，默认为false。参数optimizer_use_sql_plan_baselines用于控制是否启用SPM，默认为TRUE，表示默认情况下Oracle在生成执行计划时就会启用SPM，使用已有的SQL PLAN Baseline。
+
+  创建一个自动捕获SQL PLAN Baseline，并据此来稳定执行计划。
+
+  默认参数 
+
+sys@TEST:test> show parameter sql_plan
+
+NAME                                 TYPE        VALUE
+------------------------------------ ----------- ------------------------------
+optimizer_capture_sql_plan_baselines boolean     FALSE
+optimizer_use_sql_plan_baselines     boolean     TRUE
+  在当前session禁用SPM,同时开启自动捕获。
+
+aaa@TEST:test> alter session set optimizer_capture_sql_plan_baselines=true;
+
+Session altered.
+
+aaa@TEST:test> alter session set optimizer_use_sql_plan_baselines=false;
+
+Session altered.
+  创建测试表T2，并创建索引
+
+aaa@TEST:test> create table t2 as select * from dba_objects;
+
+Table created.
+
+aaa@TEST:test> create index idx_t2 on t2(object_id);
+
+Index created.
+  对T2收集统计信息
+
+aaa@TEST:test> exec dbms_stats.gather_table_stats(ownname => 'AAA',tabname => 'T2',estimate_percent => 100,cascade => true);
+
+PL/SQL procedure successfully completed.
+  执行SQL
+
+aaa@TEST:test> select object_id,object_name from t2 where object_id between 103 and 108;
+
+ OBJECT_ID OBJECT_NAME
+---------- ------------------------------
+       103 MIGRATE$
+       104 DEPENDENCY$
+       105 ACCESS$
+       106 I_DEPENDENCY1
+       107 I_DEPENDENCY2
+       108 I_ACCESS1
+
+6 rows selected.
+  执行计划如下
+
+-----------------------------------------------------------------------------------------------------------------------------------
+SQL_ID  8vtdn0kgytfxr, child number 0
+-------------------------------------
+select object_id,object_name from t2 where object_id between 103 and 108
+
+Plan hash value: 2008370210
+
+--------------------------------------------------------------------------------------
+| Id  | Operation                   | Name   | Rows  | Bytes | Cost (%CPU)| Time     |
+--------------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT            |        |       |       |     3 (100)|          |
+|   1 |  TABLE ACCESS BY INDEX ROWID| T2     |     6 |   180 |     3   (0)| 00:00:01 |
+|*  2 |   INDEX RANGE SCAN          | IDX_T2 |     6 |       |     2   (0)| 00:00:01
+  因为该SQL只执行过一次，所以Oracle不会自动捕获其SQL PLAN Baseline，验证：
+
+aaa@TEST:test> select sql_handle,plan_name,origin,enabled,accepted,sql_text from dba_sql_plan_baselines where sql_text like 'select object_id%';
+
+no rows selected
+  再执行一次，执行计划没有变化，因为SQL已经重复执行，Oracle会自动捕获其SQL PLAN Baseline
+
+SQL> select sql_handle,plan_name,origin,enabled,accepted,sql_text from dba_sql_plan_baselines where sql_text like 'select object_id%';
+SQL_HANDLE                     PLAN_NAME                      ORIGIN         ENABLED ACCEPTED SQL_TEXT
+------------------------------ ------------------------------ -------------- ------- -------- --------------------------------------------------------------------------------
+SYS_SQL_ac526b1e4be74880       SQL_PLAN_asnmb3t5yfk4024c6dbb6 AUTO-CAPTURE   YES     YES      select object_id,object_name from t2 where object_id between 103 and 108
+  这里修改索引IDX_T2的聚簇因子修改为2400万，改变目标SQL的执行计划为全表。
+
+SQL> exec dbms_stats.set_index_stats(ownname=>'AAA',indname=>'IDX_T2',clstfct=>24000000,no_invalidate => false);
+PL/SQL procedure successfully completed
+  重新执行SQL，执行计划如下，为全表
+
+select object_id,object_name from t2 where object_id between 103 and 108
+
+Plan hash value: 1513984157
+
+--------------------------------------------------------------------------
+| Id  | Operation         | Name | Rows  | Bytes | Cost (%CPU)| Time     |
+--------------------------------------------------------------------------
+|   0 | SELECT STATEMENT  |      |       |       |   290 (100)|          |
+|*  1 |  TABLE ACCESS FULL| T2   |     6 |   180 |   290   (1)| 00:00:04 |
+--------------------------------------------------------------------------
+ 因为目标SQL已经重复执行且又产生了一个执行计划，所以Oracle会自动捕获并创建这个新的执行计划所对应的SQL PLAN Baseline，查询视图
+
+SQL> select sql_handle,plan_name,origin,enabled,accepted,sql_text from dba_sql_plan_baselines where sql_text like 'select object_id%';
+SQL_HANDLE                     PLAN_NAME                      ORIGIN         ENABLED ACCEPTED SQL_TEXT
+------------------------------ ------------------------------ -------------- ------- -------- --------------------------------------------------------------------------------
+SYS_SQL_ac526b1e4be74880       SQL_PLAN_asnmb3t5yfk4024c6dbb6 AUTO-CAPTURE   YES     YES      select object_id,object_name from t2 where object_id between 103 and 108
+SYS_SQL_ac526b1e4be74880       SQL_PLAN_asnmb3t5yfk40b860bcf2 AUTO-CAPTURE   YES     NO       select object_id,object_name from t2 where object_id between 103 and 108
+  然后关闭当前session自动捕获SQL PLAN Baseline，并启用SPM，就是恢复11g默认
+
+aaa@TEST:test> alter session set optimizer_capture_sql_plan_baselines=false;
+
+Session altered.
+
+aaa@TEST:test> alter session set optimizer_use_sql_plan_baselines=true;
+
+Session altered.
+ 现在索引IDX_T2的聚簇因子还是2400万
+
+aaa@TEST:test> select index_name,clustering_factor from user_indexes;
+
+INDEX_NAME                     CLUSTERING_FACTOR
+------------------------------ -----------------
+IDX_T2                                  24000000
+  再次执行目标SQL，其执行计划
+
+PLAN_TABLE_OUTPUT
+-----------------------------------------------------------------------------------------------------------------------------------
+SQL_ID  8vtdn0kgytfxr, child number 2
+-------------------------------------
+select object_id,object_name from t2 where object_id between 103 and 108
+
+Plan hash value: 2008370210
+
+--------------------------------------------------------------------------------------
+| Id  | Operation                   | Name   | Rows  | Bytes | Cost (%CPU)| Time     |
+--------------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT            |        |       |       |  2069 (100)|          |
+|   1 |  TABLE ACCESS BY INDEX ROWID| T2     |     6 |   180 |  2069   (0)| 00:00:25 |
+|*  2 |   INDEX RANGE SCAN          | IDX_T2 |     6 |       |     2   (0)| 00:00:01 |
+--------------------------------------------------------------------------------------
+Note
+-----
+   - SQL plan baseline SQL_PLAN_asnmb3t5yfk4024c6dbb6 used for this statement
+  上述可以看出，现在目标SQL的执行计划已经从对表的全表扫描，变成了索引范围扫描。并且NOTE下面有“SQL plan baseline SQL_PLAN_asnmb3t5yfk4024c6dbb6 used for this statement”，这表明在启用SPM情况下， 即使目标SQL产生了新执行计划，Oracle依然只会使用enabled和accepted均为YES的SQL PLAN Baseline对应的执行计划。
+
+  如果想启用新的执行计划，对于不同版本操作不一样。
+
+  11gR1，只需要将目标SQL锁采用的名为SQL_PLAN_asnmb3t5yfk4024c6dbb6的SQL PLAN Baseline的accepted值变为NO即可。
+
+SQL> var temp number;
+SQL> exec :temp:=dbms_spm.alter_sql_plan_baseline(sql_handle => 'SYS_SQL_ac526b1e4be74880',plan_name => 'SQL_PLAN_asnmb3t5yfk4024c6dbb6',attribute_name => 'accepted',attribute_value => 'NO');
+  在11gR2中，执行上述代码或报错
+
+SQL> var temp number;
+SQL> exec :temp:=dbms_spm.alter_sql_plan_baseline(sql_handle => 'SYS_SQL_ac526b1e4be74880',plan_name => 'SQL_PLAN_asnmb3t5yfk4024c6dbb6',attribute_name => 'accepted',attribute_value => 'NO');
+begin :temp:=dbms_spm.alter_sql_plan_baseline(sql_handle => 'SYS_SQL_ac526b1e4be74880',plan_name => 'SQL_PLAN_asnmb3t5yfk4024c6dbb6',attribute_name => 'accepted',attribute_value => 'NO'); end;
+ORA-38136: 指定的属性名 ACCEPTED 无效
+ORA-06512: 在 "SYS.DBMS_SPM", line 2469
+ORA-06512: 在 line 1
+temp
+---------
+ 在11gR2中，使用dbms_spm.evolve_sql_plan_baseline和dbms_spm.alter_sql_plan_baseline达到启用新执行计划的目的。
+
+  先用dbms_spm.evolve_sql_plan_baseline将新执行计划的accepted置为YES
+
+SQL> var temp varchar2(4000);
+SQL> exec :temp:=dbms_spm.evolve_sql_plan_baseline(sql_handle => 'SYS_SQL_ac526b1e4be74880',plan_name => 'SQL_PLAN_asnmb3t5yfk40b860bcf2',verify => 'NO',commit => 'YES');
+PL/SQL procedure successfully completed
+temp
+---------
+
+-------------------------------------------------------------------------------
+                        Evolve SQL Plan Baseline Report
+-------------------------------------------------------------------------------
+
+Inputs:
+-------
+  SQL_HANDLE = SYS_SQL_ac526b1e4be74880
+  PLAN_NAME  = SQL_PLAN_asnmb3t5yfk40b860bcf2
+  TIME_LIMIT = DBMS_SPM.AUTO_LIMIT
+  VERIFY     = NO
+  COMMIT     = YES
+
+Plan: SQL_PLAN_asnmb3t5yfk40b860bcf2
+------------------------------------
+  It is already an accepted plan.
+
+-------------------------------------------------------------------------------
+                                 Report Summary
+-------------------------------------------------------------------------------
+There were no SQL plan baselines that required processing.
+
+SQL> select sql_handle,plan_name,origin,enabled,accepted,sql_text from dba_sql_plan_baselines where sql_text like 'select object_id%';
+SQL_HANDLE                     PLAN_NAME                      ORIGIN         ENABLED ACCEPTED SQL_TEXT
+------------------------------ ------------------------------ -------------- ------- -------- --------------------------------------------------------------------------------
+SYS_SQL_ac526b1e4be74880       SQL_PLAN_asnmb3t5yfk4024c6dbb6 AUTO-CAPTURE   YES     YES      select object_id,object_name from t2 where object_id between 103 and 108
+SYS_SQL_ac526b1e4be74880       SQL_PLAN_asnmb3t5yfk40b860bcf2 AUTO-CAPTURE   YES     YES      select object_id,object_name from t2 where ob
+  再使用dbms_spm.alter_sql_plan_baseline把PLAN_NAME为SQL_PLAN_asnmb3t5yfk4024c6dbb6的SQL PLAN Baseline的enabled置为NO。
+
+SQL> var temp number;
+SQL> exec :temp:=dbms_spm.alter_sql_plan_baseline(sql_handle => 'SYS_SQL_ac526b1e4be74880',plan_name => 'SQL_PLAN_asnmb3t5yfk4024c6dbb6',attribute_name => 'ENABLED',attribute_value => 'NO');
+PL/SQL procedure successfully completed
+temp
+---------
+1
+
+SQL> select sql_handle,plan_name,origin,enabled,accepted,sql_text from dba_sql_plan_baselines where sql_text like 'select object_id%';
+SQL_HANDLE                     PLAN_NAME                      ORIGIN         ENABLED ACCEPTED SQL_TEXT
+------------------------------ ------------------------------ -------------- ------- -------- --------------------------------------------------------------------------------
+SYS_SQL_ac526b1e4be74880       SQL_PLAN_asnmb3t5yfk4024c6dbb6 AUTO-CAPTURE   NO      YES      select object_id,object_name from t2 where object_id between 103 and 108
+SYS_SQL_ac526b1e4be74880       SQL_PLAN_asnmb3t5yfk40b860bcf2 AUTO-CAPTURE   YES     YES      select object_id,object_name from t2 where object_id between 103 and 108
+  再次执行目标SQL
+
+PLAN_TABLE_OUTPUT
+-----------------------------------------------------------------------------------------------------------------------------------
+SQL_ID  8vtdn0kgytfxr, child number 0
+-------------------------------------
+select object_id,object_name from t2 where object_id between 103 and 108
+
+Plan hash value: 1513984157
+
+--------------------------------------------------------------------------
+| Id  | Operation         | Name | Rows  | Bytes | Cost (%CPU)| Time     |
+--------------------------------------------------------------------------
+|   0 | SELECT STATEMENT  |      |       |       |   290 (100)|          |
+|*  1 |  TABLE ACCESS FULL| T2   |     6 |   180 |   290   (1)| 00:00:04 |
+--------------------------------------------------------------------------
+Note
+-----
+   - SQL plan baseline SQL_PLAN_asnmb3t5yfk40b860bcf2 used for this statement
+  使用了新的执行计划，注意NOTE中SQL_PLAN_asnmb3t5yfk40b860bcf2即SQL PLAN Baseline中enabled和accepted均为YES的SQL PLAN Baseline对应的执行执行计划名。
+
+  从测试结果看出，我们可以在目标SQL的多个执行计划之间切换，所以SPM既能稳定执行计划，又保留了继续使用新的执行计划的机会。
+
+
+
+  接下来介绍手工生成SQL PLAN Baseline。手工生成很简单，核心是调用dbms_spm.load_plans_from_cursor_cache。
+
+ 针对目标SQL使用dbms_spm.load_plans_from_cursor_cache手工生成其初始执行计划所对应的SQL PLAN Baseline。
+
+PLAN_TABLE_OUTPUT
+-----------------------------------------------------------------------------------------------------------------------------------
+SQL_ID  85htp4tya3uwm, child number 0
+-------------------------------------
+select /*+ no_index(t2 idx_t2)*/ object_name,object_id from t2 where
+object_id=4
+
+Plan hash value: 1513984157
+
+--------------------------------------------------------------------------
+| Id  | Operation         | Name | Rows  | Bytes | Cost (%CPU)| Time     |
+--------------------------------------------------------------------------
+|   0 | SELECT STATEMENT  |      |       |       |   290 (100)|          |
+|*  1 |  TABLE ACCESS FULL| T2   |     1 |    30 |   290   (1)| 00:00:04 |
+  上述SQL的SQL_ID为85htp4tya3uwm，plan_hash_value为1513984157，现在没有开启自动捕获SQL PLAN Baseline。视图dba_sql_plan_baselines应该没有对应信息。
+
+select sql_handle,plan_name,origin,enabled,accepted,sql_text from dba_sql_plan_baselines where sql_text like 'select object_name%';
+SQL_HANDLE                     PLAN_NAME                      ORIGIN         ENABLED ACCEPTED SQL_TEXT
+------------------------------ ------------------------------ -------------- ------- -------- -----------------------------------------------------------
+  使用目标SQL的SQL_ID和PLAN_HASH_VALUE来生成所对应的SQL PLAN Baseline。
+
+SQL> var temp number;
+SQL> exec :temp:=dbms_spm.load_plans_from_cursor_cache(sql_id=>'85htp4tya3uwm',plan_hash_value=>1513984157);
+PL/SQL procedure successfully completed
+temp
+---------
+1
+SQL> select sql_handle,plan_name,origin,enabled,accepted,sql_text from dba_sql_plan_baselines where sql_text like 'select /*+ no_index(t2 idx_t2)*/ object_name%';
+SQL_HANDLE                     PLAN_NAME                      ORIGIN         ENABLED ACCEPTED SQL_TEXT
+------------------------------ ------------------------------ -------------- ------- -------- --------------------------------------------------------------------------------
+SYS_SQL_75b06ae056223f5f       SQL_PLAN_7bc3aw1b24guzb860bcf2 MANUAL-LOAD    YES     YES      select /*+ no_index(t2 idx_t2)*/ object_name,object_id from t2 where object_id=4
+  已经生成了SQL_HANDLE为SYS_SQL_75b06ae056223f5f和PLAN_NAME为SQL_PLAN_7bc3aw1b24guzb860bcf2的SQL PLAN Baseline。
+
+  改写原目标SQL，加入强制走索引hint
+
+PLAN_TABLE_OUTPUT
+-----------------------------------------------------------------------------------------------------------------------------------
+SQL_ID  0argb4cn0sybz, child number 0
+-------------------------------------
+select /*+ index(t2 idx_t2)*/ object_name,object_id from t2 where
+object_id=4
+
+Plan hash value: 2008370210
+
+--------------------------------------------------------------------------------------
+| Id  | Operation                   | Name   | Rows  | Bytes | Cost (%CPU)| Time     |
+--------------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT            |        |       |       |   332 (100)|          |
+|   1 |  TABLE ACCESS BY INDEX ROWID| T2     |     1 |    30 |   332   (0)| 00:00:04 |
+|*  2 |   INDEX RANGE SCAN          | IDX_T2 |     1 |       |     1   (0)| 00:00:01 |
+  改写后走索引，SQL_ID=0argb4cn0sybz，Plan hash value: 2008370210。
+
+  再加上原目标SQL的SQL_HANDLE来生成新的SQL PLAN Baseline。
+
+SQL> exec :temp:=dbms_spm.load_plans_from_cursor_cache(sql_id=>'0argb4cn0sybz',plan_hash_value=>2008370210,sql_handle=>'SYS_SQL_75b06ae056223f5f');
+PL/SQL procedure successfully completed
+temp
+---------
+1
+SQL> select sql_handle,plan_name,origin,enabled,accepted,sql_text from dba_sql_plan_baselines where sql_text like 'select /*+ no_index(t2 idx_t2)*/ object_name%';
+SQL_HANDLE                     PLAN_NAME                      ORIGIN         ENABLED ACCEPTED SQL_TEXT
+------------------------------ ------------------------------ -------------- ------- -------- --------------------------------------------------------------------------------
+SYS_SQL_75b06ae056223f5f       SQL_PLAN_7bc3aw1b24guz24c6dbb6 MANUAL-LOAD    YES     YES      select /*+ no_index(t2 idx_t2)*/ object_name,object_id from t2 where object_id=4
+SYS_SQL_75b06ae056223f5f       SQL_PLAN_7bc3aw1b24guzb860bcf2 MANUAL-LOAD    YES     YES      select /*+ no_index(t2 idx_t2)*/ object_name,object_id from t2 where object_id=4
+ 上述可以看出原目标SQL生成了新的PLAN，其PLAN_NAME为SQL_PLAN_7bc3aw1b24guz24c6dbb6。注意新生成的SQL PLAN Baseline的enabled和accepted均为YES，这是个自动捕获不同的地方。
+
+  现在DROP掉原目标SQL走全表扫描所对应的SQL PLAN Baseline。
+
+SQL> exec :temp:=dbms_spm.drop_sql_plan_baseline(sql_handle =>'SYS_SQL_75b06ae056223f5f',plan_name => 'SQL_PLAN_7bc3aw1b24guzb860bcf2');
+PL/SQL procedure successfully completed
+temp
+---------
+1
+SQL>  select sql_handle,plan_name,origin,enabled,accepted,sql_text from dba_sql_plan_baselines where sql_text like 'select /*+ no_index(t2 idx_t2)*/ object_name%';
+SQL_HANDLE                     PLAN_NAME                      ORIGIN         ENABLED ACCEPTED SQL_TEXT
+------------------------------ ------------------------------ -------------- ------- -------- --------------------------------------------------------------------------------
+SYS_SQL_75b06ae056223f5f       SQL_PLAN_7bc3aw1b24guz24c6dbb6 MANUAL-LOAD    YES     YES      select /*+ no_index(t2 idx_t2)*/ object_name,object_id from t2 where object_id=4
+  再次执行原SQL，可以看到走了索引
+
+PLAN_TABLE_OUTPUT
+-----------------------------------------------------------------------------------------------------------------------------------
+SQL_ID  85htp4tya3uwm, child number 2
+-------------------------------------
+select /*+ no_index(t2 idx_t2)*/ object_name,object_id from t2 where
+object_id=4
+
+Plan hash value: 2008370210
+
+--------------------------------------------------------------------------------------
+| Id  | Operation                   | Name   | Rows  | Bytes | Cost (%CPU)| Time     |
+--------------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT            |        |       |       |   332 (100)|          |
+|   1 |  TABLE ACCESS BY INDEX ROWID| T2     |     1 |    30 |   332   (0)| 00:00:04 |
+|*  2 |   INDEX RANGE SCAN          | IDX_T2 |     1 |       |     1   (0)| 00:00:01 |
+--------------------------------------------------------------------------------------
+Note
+-----
+   - SQL plan baseline SQL_PLAN_7bc3aw1b24guz24c6dbb6 used for this statement
+  最后注意NOTE下面，使用了SQL PLAN Baeline。
