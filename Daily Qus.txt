@@ -1,0 +1,2689 @@
+﻿'查看了文档反应如果是连接池就可能出现program为空
+http://gavinsoorma.com/
+
+=CONCATENATE("insert into F3602914.GYS02_56(wip_no) values('",A1,"');")   18848854533
+ORA$AT_OS_OPT_SY_1104
+
+enq: PV - syncstart  qmnc
+
+
+----------The often used oracle built-in function---------------
+dbms_metadata.get_ddl --get ddl source code
+dbms_rowid.
+dbms_lock.sleep
+DBMS_UTILITY.FORMAT_ERROR_BACKTRACE
+DBMS_UTILITY.FORMAT_ERROR_STACK
+----------The often used oracle built-in function---------------
+
+1.V$SESSION.STATUS ---SNIPED  
+The session has passed the idle_time limit defined in user profile. The session will remain snipped until the client communicates with the db again, 
+when it will get "ORA-02396: exceeded maximum idle time, please connect again" and the session is removed from v$session.
+sniped are marked for kill sessions. generally smon cleans it up to refresh the dead connections in the database. 
+you could also send a wakeup signal to smon. 
+for eg:- 
+WAKEUP command
+To wake up a process use 
+ORADEBUG WAKEUP pid 
+For example to wake up SMON, first obtain the PID using 
+SELECT pid FROM v$process 
+WHERE addr = 
+(SELECT paddr FROM v$bgprocess 
+WHERE name = 'SMON'); 
+If the PID is 6 then send a wakeup call using
+ORADEBUG WAKEUP 6 
+2.Error about Scn_to_timestamp.
+SYS.SMON_SCN_TIME will have a maximum of 1440 rows and each record will be for a 5 minute period. 
+Oracle maintains this information for a maximum of 5 days after which the records will be recycled.
+This means that data is stored 12 times per hour * 24 hours * 5 days = 1440 rows.  
+SCN value is stored internally as :
+•SCN_wrap
+•SCN_base
+SCN <-> TIMESTAMP conversion features are available only from Oracle 10g.
+In 10g, there are two built-in functions to give the timestamp and SCN mapping details
+•Timestamp_to_scn()
+•Scn_to_timestamp()
+ID 204334.1
+3.Performance issue when using NVL function:(This issue only occur on column which be indexed)
+Workaround:
+  3.1.add no_expand
+  3.2.change a.line_name=nvl(b1,a.line_name) to (a.line_name=b6 or b6 is null)
+  Note:If line_name not allow null then this conversion is equal if not then this conversion will lose value of line_name is null.
+4.SQL SPECIAL
+unqualified column in subquery with strange result.
+This is the expect behavior. In a subquery, Oracle resolves unqualified columns in the subquery by looking in the tables named in the subquery and 
+then in the tables named in the parent statement.
+For example:
+select * from f1222879.test_del_1 where id in ( select id from f1222879. test_del_2 );
+In the subquery ( select id from f1222879. test_del_2 ) , Oracle will check if "f1222879. test_del_2" has a column named "id" first, 
+if not, Oracle will check the table "f1222879.test_del_1" in the parent statement, this time it found the table "f1222879.test_del_1" 
+has a column named "id",then it will use it instead. So the SQL above is equivalent to below SQL:
+5.Variable:
+    In the statement executing phase which means the statment had finished parse and no sytanx error can be execute,
+	then variable can be used to.
+    Execute Immediate:
+      You can only use placeholders in places where you can substitute variables in the SQL statement, 
+      such as conditional tests in WHERE clauses. You cannot use placeholders for the names of schema objects. For the right way
+6.alter system switch logfile VS alter system archive log current
+  Those Two commands will switch logfile and archived current logfile or all no archived logfile.
+  a.In RAC ENV
+    alter system switch logfile:only swith current instance logfile
+    alter system archive log current:Will switch logfile in all instance in this RAC
+  b.location
+    alter system switch logfile:Can't specify location,only archive logfile to archive_log_dest_1's location.
+    alter system archive log current:You can specify new location as 'to '/oradata' to overwrite the archive_log_dest_1's location.
+Result:
+     Suggest to use alter system archive log current. 
+ 
+7.Parallel execution.
+  2.1:Before execution Parallel command,ensure parameter parallel_max_servers set to enough value,if this value to low e.g 0.
+      Will prevent parallel execution.
+  2.2:Through view V$px_session you can identify parallel execution session.
+8.Alter system set parameter=value <comment='text'> <deferred> <scope=memory|spfile|both> <sid='sid|*'>
+  deferred指定系统修改是否只对以后的会话生效（对当前建立的会话无效，包括执行此修改的会话）。默认情况下，ALTER SYSTEM命令会立即生效，
+  但是有些参数不能“立即”修改，只能为新建立的会话修改这些参数。可以使用以下查询来看看哪些参数要求必须使用deferred：
+  Alter system reset parameter <scope=memory|spfile|both> sid='sid|*'
+9.跟蹤文件有2類：
+  1.你請求追蹤的跟蹤文件  2.你不想要的追蹤文件,但在出現相關錯誤時ORACLE會自動生成這些跟蹤文件.
+  2.追蹤文件位置:               
+    show parameter '%dump_dest%'
+    如果使用专用服务器连接，会在USER_DUMP_DEST参数指定的目录中生成跟踪文件。
+    如果使用共享服务器连接，则在BACKGROUND_DUMP_DEST参数指定的目录中生成跟踪文件。
+  3.對追蹤文件加標記
+    alter session set tracefile_identifier='Look_For_me';
+  9.1.修改跟蹤文件
+  Change tracking file 是一個可選文件,这个文件惟一的目的是跟踪自上一个增量备份以来哪些块已经修改。采用这种方式，
+  恢复管理器（Recovery Manager，RMAN,所以RMAN的备份策略要考虑到这个8次bitmap 的影响。）工具就能只备份确实有变化的数据库块，而不必读取整个数据库。
+  1.alter database enable block change tracking  using file   '/home/ora10gr1/product/10.1.0/oradata/ora10gr1/ORA10GR1/changed_blocks.bct';
+    Note:要记住，不要轻易执行设置参数、修改数据库和产生重大改变的命令， 在你的“实际”系统上用这些命令之前一定要先进行测试。
+    实际上，前面这个命令会导致数据库做更多工作。它会消耗资源。
+  2.alter database disable block change tracking;
+10.SQLPLUS中的常用命令:
+   1.define s=1
+     exec dbms_output.put_line('&s');
+   2.variable s char
+     exec :s:=1
+     print s
+   3.set verify off      //可以关闭和打开提示确认信息old 1和new 1的显示. 
+   4.set wrap off ;　　  //设置当行长度超过linesize时，是否截断显示。set wrap off ,截断，set wrap on 分行显示
+   5.set termout off;    //不显示脚本中的命令的执行结果，缺省为on
+   6.set trimout on;　   //去除标准输出每行的拖尾空格，缺省为off
+   7.set feedback off;   //回显本次sql命令处理的记录条数，缺省为on
+   8.set pagesize 300
+11.Something about rename table
+   1.手動RENAME 索引和表名稱時:
+     前面索引或表帶了模式,後面的不用代
+   2.rename表后,調用此表的存儲過程還在舊表上(暨RENAME后的表上),新表上將看不到調用此錶的存儲過程.
+12.close dblink
+   exec dbms_session.close_database_link('ZZBI')---->To replace ZZBI to actual value with your current using.
+2.HP-UNIX sync time
+more /etc/ntp.conf
+13.什么情况下，操作信息会出现在V$SESSION_LONGOPS
+同时满足以下几个条件，操作信息才会出现在V$SESSION_LONGOPS中。
+1、操作是以下几种操作之一
+# Table full scan;
+# Index Fast Full Scan;
+# Hash join;
+# Sort/Merge;
+# Sort Output;
+# Rollback;
+# Gather Table's Index Statistics
+不同的版本下V$SESSION_LONGOPS记录的操作可能会不一样。
+2、操作时间大于6秒
+3、读取的block数目大于一定量
+1）如果是TABLE FULL SCAN，读取的block数目至少大于10000
+2）如果是Index Fast Full Scan，读取的block数目至少大于1000
+3）其他操作读取block的数目不明
+14.shutdown database faster
+  3.1:Normal 
+     1.close em
+       emctl stop dbconsole
+     2.alter system archive log current;
+     3.ps -ef|grep -i local=no|grep -v grep|awk '{print $2}'|xargs kill -9
+     4.shutdown immediate
+  3.2:Exception
+     1.shutdown abort
+     2.startup restrict 
+     3.shutdown normal
+  3.3:Run below command to find active session if all piror command all faild;
+     1.alter session set events '10400 trace name context forever,level 1';
+     2.shutdown immediate
+   
+15.For each SQL statement the library cache contains a "parent" cursor for the text of the SQL statement. 
+The parent cursor is comprised of a "handle" that can be looked up by hash value via the library cache hash table, 
+and an "object" that contains pointers to each of its "child" cursors. Each child cursor is also comprised of a handle and an object.
+The child object is comprised of two heaps numbered 0 and 6. Heap 0 contains all the identifying information for a particular version of the SQL statement 
+and heap 6 contains the execution plan. This distinction between parent and child cursors is maintained even when there is only one version of each SQL statement.
+15.JOb 設定OK,但是不執行.
+要想JOB定時運行,請確保job_queue_processes參數值大於0
+DECLARE
+  X NUMBER;
+BEGIN
+  SYS.DBMS_JOB.SUBMIT
+  ( job       => X 
+   ,what      => 'sys.DEL_EMDII_HISTORY;'
+   ,next_date => to_date('20130927091500','yyyymmddhh24:miss')
+   ,interval  => 'sysdate+1/86400'
+   ,no_parse  => FALSE
+  );
+  SYS.DBMS_OUTPUT.PUT_LINE('Job Number is: ' || X);
+COMMIT;
+END;
+/
+16:Process column mean in V$session
+  Column process record Client process id,so if you through WIN platform connect to DB,then it's value look like 888:999 first part 888 is
+process id in win platform,the another part is thread id,(you can get this message through pslist batjob,but it's not install,you should download).
+In other platform like Linux,process only have process id,so you will see one part in process column.
+  Spid:
+  When you build connection between client and oracle db,oracle db will fork one db process to serve client process.this process id will
+be record in V$process's spid column.
+  If you run one query statement which contain dblink in Windows platform but database Os is linux.then is source db,client process will
+be record in process column in V$session,because database OS is linux and you connect to target database through database link,so target 
+database V$session's process column will also record client id,but it's not windows client infomation,it's database OS spid infomation.so
+process column value will like 999 because linux process only have process id.
+CREATE OR REPLACE FUNCTION MD5(
+passwd IN VARCHAR2)
+RETURN VARCHAR2
+IS
+retval varchar2(32);
+BEGIN
+retval := utl_raw.cast_to_raw(DBMS_OBFUSCATION_TOOLKIT.MD5(INPUT_STRING => passwd)) ;
+RETURN retval;
+END;
+/
+17：Take a system dump and a hang hanganalyze dump
+$sqlplus -prelim / as sysdba<==When you can’t login to DB when DB is hanging
+SQL>oradebug setmypid
+SQL>oradebug unlimit
+SQL>oradebug dump hanganalyze 3
+SQL>oradebug dump systemstate 266
+Wait for some 30 seconds
+SQL>oradebug dump hanganalyze 3
+SQL>oradebug dump systemstate 266
+Wait for some 30 seconds
+SQL>oradebug dump hanganalyze 3
+SQL>oradebug dump systemstate 266
+SQL>oradebug tracefile_name ==>This will get the trace file name.
+SQL>oradebug close_trace
+18:1个亿数据单表去重，求好思路~ 下麵使用的是分析函數.
+alter session force parallel dml paralllel 16;
+insert /*+ APPEND */ first
+when error_ind = 1 then into
+stage2_scan_events
+values ( ... )
+else into
+stage1_scan_events_err
+select
+s.*
+,row_number() over (
+partition by
+loc_code,rtl_trx_seq_nbr,trx_line_item_seq_nbr
+order by
+file_seq_nbr desc,rowid
+) as error_ind
+,rowid as rid
+from
+stage1_scan_events_ref s;
+19.How compute tables_size through dba_tab_statistics
+1.Table_size=tab_row_nums*avg_length+tab_row_nums*avg_length*0.213
+20.deal wait for a undo record event.---DML 語句異常結束.导致大量事务rollback，出现wait for a undo record的情况
+  1.select * from V$FAST_START_TRANSACTIONS
+  2.select * from v$event_name where name like 'wait for a undo record' ---option
+  3.select * from FLASHBACK_TRANSACTION_QUERY where xid=hextoraw('230006005E550100');--230006005E550100 results of query in 1
+  4.select * from V$ACTIVE_SESSION_HISTORY where xid=hextoraw('230006005E550100'); ---find relative sql in active session history
+  5.select * from DBA_HIST_ACTIVE_SESS_HISTORY where xid=hextoraw('230006005E550100')---find relative sql 
+  6.select * from DBA_HIST_SQLTEXT where sql_id='ftm564rm196my'; OR select * from v$sql where sql_id='ftm564rm196my'; ---find content of special sql
+  
+21:ROW CACHE LOCK基础说明
+ROW CACHE LOCK等待事件是一个共享池相关的等待事件。是由于对于字典缓冲的访问造成的。
+P1 – Cache Id
+P2 – Mode Held
+P3 – Mode Requested
+mode REQUEST的取值：
+KQRMNULL 0 null mode – not locked
+KQRMS 3 share mode
+KQRMX 5 exclusive mode
+KQRMFAIL 10 fail to acquire instance lock
+--查询row cache lock等待 select *  from v$session_wait where wait_class = 'row cache lock';   
+--查询rowcache 名称 select * from v$rowcache where cache# = &p1; 
+  ENQUEUE TYPE
+  DC_TABLESPACES
+  Probably the most likely cause is the allocation of new extents. If extent sizes are set low then the application may constantly be requesting new extents and causing contention. 
+  Do you have objects with small extent sizes that are rapidly growing? (You may be able to spot these by looking for objects with large numbers of extents). Check the trace for insert/update activity, check the objects inserted into for number of extents.
+  DC_SEQUENCES
+  Check for appropriate caching of sequences for the application requirements.
+  DC_USERS
+  Deadlock and resulting “WAITED TOO LONG FOR A ROW CACHE ENQUEUE LOCK!” can occur if a session issues a GRANT to a user, and that user is in the process of logging on to the database.
+  DC_SEGMENTS
+  This is likely to be down to segment allocation. Identify what the session holding the enqueue is doing and use errorstacks to diagnose.
+  DB_ROLLBACK_SEGMENTS
+  This is due to rollback segment allocation. Just like dc_segments,identify what is holding the enqueue and also generate errorstacks. 
+  Remember that on a multi-node system (RAC) the holder may be on another node and so multiple systemstates from each node will be required.
+  DC_AWR_CONTROL
+  This enqueue is related to control of the Automatic Workload Repository. As such any operation manipulating the repository may hold 
+  this so look for processes blocking these. 
+22:'Enq: Tx - Row Lock Contention' 
+   A TX lock is acquired when a transaction initiates its first change and is held until the transaction does a COMMIT or ROLLBACK. 
+   It is used mainly as a queuing mechanism so that other sessions can wait for the transaction to complete. 
+   The lock name (ID1 and ID2) of the TX lock reflect the transaction ID of the active transaction.
+   SELECT sid,  p1raw,  p2,  p3
+   FROM v$session_wait
+   WHERE wait_time     = 0
+   AND event           = 'enq: TX - row lock contention';
+   •Show sessions waiting for a TX lock:
+   SELECT * FROM v$lock WHERE type='TX' AND request>0;
+   •Show sessions holding a TX lock:
+   SELECT * FROM v$lock WHERE type='TX' AND lmode > 0;
+   Situation 1:Waits due to Row being locked by an active Transaction---Requset_mode=6
+   Situation 2:Waits due to Unique or Primary Key Constraint enforcement  ---Request_mode=4 and held_mode=6
+   Situation 3:Waits due to Insufficient 'ITL' slots in a Block ------Request_mode=4
+   Situation 4:Waits due to rows being covered by the same BITMAP index fragment --Request_mode=4 and held_mode=6
+23:linux下su切換用戶報錯
+ls -l /bin/su權限錯誤正確的為:-rwsr-xr-x  錯誤的為:-rwxr-xr-x
+-rwxr-xr-x
+  u  g  o 
+Solution:chmod u+s /bin/su
+/etc/ssh/sshd/ssh_config
+1、文件访问权限
+1、文件访问者的分类
+a)、文件和文件目录的所有者：u---User
+b)、文件和文件目录的所有者所在的组的用户：g---Group
+c)、其它用户：o---Others
+2、文件访问权限的种类
+a)、基本权限
+i.读 （r/4）：Read               对文件而言，具有读取文件内容的权限；对目录来说，具有浏览该目录信息的权限
+ii.写        （w/2）：Write      对文件而言，具有修改文件内容的权限；对目录来说具有删除移动目录内文件的权限
+iii.执行 （x/1）：execute        对文件而言，具有执行文件的权限；对目录来说，具有进入目录的权限
+iv.“—”表示不具有该项权限
+b)、特殊权限
+i.suid (s/4)     只能应用在可执行文件上，允许任意用户在执行文间时以文件拥有者的身份执行
+ii.sgid （s/2）  只能应用在可执行文件上，使任意用户在执行可文件时，将以拥有组成员的身份执行
+iii.粘着位(t/1)只能应用在目录文件上，将使用户在目录中执行删除时，只能删除自己拥有的对象
+24.單機開機情況下啟動VCS
+1.gabconfig -x  --gabconfig - Group Membership and Atomic Broadcast (GAB) configuration utility 
+2.hastart
+3.hastatus 
+24:COUNT(1),COUNT(*)與COUNT(COLUMN)的區別
+不同点：count(*),count(1)
+统计包含null值；如果有索引的话，必须保证索引列没有null值才会走索引；
+count(column)
+统计不包含null值；索引列是否有null值都不会影响走索引 ；因为统计的时候就已经把null值排除了；
+25:OGG abended checkpoint position is greater than the size of the file
+2014-03-22 07:05:15  ERROR   OGG-01705  Oracle GoldenGate Delivery for Oracle, r_dmp2_l.prm:  
+Input checkpoint position 112540563 for input trail file './rep_dash_new_L/r2352256' is greater 
+than the size of the file (112468803).  Please consult Oracle Knowledge Management Doc ID 1138409.1. for instructions.
+Action: alter replicat_name extseqno next_tail_number extrba 0
+In the scenario described above, records already processed by the reader (Datapump or Replicat) may be written to the new trail file. 
+Manual intervention is required to avoid duplicate processing.
+The manual recovery process requires finding any records that will be duplicated 
+(from the reader's point of view) in seqno X+1 (assuming current seqno is X). 
+The reader should be altered to the RBA of the record just after the RestartAbend record + (totaled length of duplicated records)).
+The calculated RBA to which the reader trail file is altered should be the address of a record that starts a transaction.
+ The start of a transaction is indicated by a TransInd value of (x00- first record in transaction) or (x03- only record in the transaction).
+Mos Doc:ID 1138409.1
+26:動態SQL導致ORA-07445 錯誤【kggmsFindCB()+13 [Address not mapped to object]】
+1.在動態SQL中如果同一個變量在SQL語句中出現多次,不要使用同一個的占位符號,不然會導致ORA-07445例如
+錯誤:
+SELECT t.sfc_test_station_name,
+                  t.apple_test_station_code,
+                  SUM (CASE t.alert_level WHEN 'P1' THEN 1 ELSE 0 END) AS overall_p1,
+                  SUM (CASE t.alert_level WHEN 'P2' THEN 1 ELSE 0 END) AS overall_p2,
+                  SUM (CASE t.alert_level WHEN 'P3' THEN 1 ELSE 0 END) AS overall_p3, SUM (CASE t.alert_level || t.area WHEN 'P1E' THEN 1 ELSE 0 END) AS E_p1, SUM (CASE t.alert_level || t.area WHEN 'P2E' THEN 1 ELSE 0 END) AS E_p2, SUM (CASE t.alert_level || t.area WHEN 'P3E' THEN 1 ELSE 0 END) AS E_p3, SUM (CASE t.alert_level || t.area WHEN 'P1K' THEN 1 ELSE 0 END) AS K_p1, SUM (CASE t.alert_level || t.area WHEN 'P2K' THEN 1 ELSE 0 END) AS K_p2, SUM (CASE t.alert_level || t.area WHEN 'P3K' THEN 1 ELSE 0 END) AS K_p3  FROM zbcdmp2_dmp2web.pms_alert_log_t t
+            WHERE     1 = 1
+                  AND t.status IN ('1', '2')
+                  AND t.category_group = :v_product_sort ----------需變更
+                  AND (regexp_instr(:v_area_name,t.area)>0 or :v_area_name='ALL'   )----------需變更
+                  AND (regexp_instr(:v_floor_name,t.line_floor)>0 or :v_floor_name='ALL'   )----------需變更
+OPEN p_cursor FOR v_sql  using v_product_sort, v_area_name , v_floor_name;----------需變更
+變更后
+SELECT t.sfc_test_station_name,
+                  t.apple_test_station_code,
+                  SUM (CASE t.alert_level WHEN 'P1' THEN 1 ELSE 0 END) AS overall_p1,
+                  SUM (CASE t.alert_level WHEN 'P2' THEN 1 ELSE 0 END) AS overall_p2,
+                  SUM (CASE t.alert_level WHEN 'P3' THEN 1 ELSE 0 END) AS overall_p3, SUM (CASE t.alert_level || t.area WHEN 'P1E' THEN 1 ELSE 0 END) AS E_p1, SUM (CASE t.alert_level || t.area WHEN 'P2E' THEN 1 ELSE 0 END) AS E_p2, SUM (CASE t.alert_level || t.area WHEN 'P3E' THEN 1 ELSE 0 END) AS E_p3, SUM (CASE t.alert_level || t.area WHEN 'P1K' THEN 1 ELSE 0 END) AS K_p1, SUM (CASE t.alert_level || t.area WHEN 'P2K' THEN 1 ELSE 0 END) AS K_p2, SUM (CASE t.alert_level || t.area WHEN 'P3K' THEN 1 ELSE 0 END) AS K_p3  FROM zbcdmp2_dmp2web.pms_alert_log_t t
+            WHERE     1 = 1
+                  AND t.status IN ('1', '2')
+                  AND t.category_group = :1 ----------變更后:v_product_sort變為:1
+                  AND (regexp_instr(:2,t.area)>0 or :3='ALL'   )----------變更后:v_area_name變為:2,:3
+                  AND (regexp_instr(:4,t.line_floor)>0 or :5='ALL'   )----------變更后:v_floor_name變為:4,:5
+OPEN p_cursor FOR v_sql  using v_product_sort, v_area_name ,v_area_name, v_floor_name,v_floor_name;----------需變更
+28:Change oracle character Set:
+Note:如無特殊需求,推薦字符集使用:AL32UTF8 國家字符集使用:AL16UTF16
+SQL> conn sys/sys as sysdba;
+SQL> shutdown immediate;
+SQL> STARTUP MOUNT;
+SQL> ALTER SESSION SET SQL_TRACE=TRUE;
+SQL> ALTER SYSTEM ENABLE RESTRICTED SESSION;
+SQL> ALTER SYSTEM SET JOB_QUEUE_PROCESSES=0;
+SQL> ALTER SYSTEM SET AQ_TM_PROCESSES=0;
+SQL> Alter database open;
+SQL> ALTER DATABASE CHARACTER SET ZHS16GBK;如果報:ORA-12712: new character set must be a superset of old character set 
+此句修改為:
+SQL> ALTER DATABASE character set INTERNAL_USE ZHS16GBK; 
+SQL> Shutdown immediate;
+29:impdp data to table who exists index
+1.impdp data---->impdp data to table---->rebuild index
+2.insert directly ----->insert on and maitain this one's index.
+30.INDEX PCTFREE(pctfree&initrans設置過大,都會導致相應對象使用的空間成倍增長)
+PCTFREE isn't considered in an index after the index is built.  
+PCTFREE is only meaningful during an index build -- then we will reserve x% of the block for furture updates.  
+After that -- we stuff those blocks as full as we can.
+In a table, when you want to insert a row, you need only to find ANY block that has sufficient free space
+In a index,you cannot put the "rows" on just any old block,they have to go onto a very specific block,that block is the block their key 'sorts' onto.
+Even if that block is 100% full,that is where that row MUST go(unlike a table, in a table if a block was 100% full - we would of course just look for another block - you cannot do that in an index). 
+Therefore - we do not, cannot consult a freelist to find just ANY block to insert into with an index - we look into the index and find out where that row MUST go. 
+If that block it must go on is 100% full - we will split that block in two - Now we need an empty block to put half of the data on,
+This is where the freelist for the index comes into play. All of the blocks on the freelist for an index are 100% empty 
+(if they were not empty - they would be in a very specific position in the index structure itself already and could not be moved). 
+We get an empty block and link it into the index right next to the full block and put about half of the data from the full block onto it. 
+Now we have two half empty blocks and plenty of room to insert our new index key entry. 
+The maximum value suggested for INITRANS is 100 and settings over this size rarely improve performance. 
+Therefore a setting of INITRANS to the average number of simultaneous DML users and setting MAXTRANS to 100 will most likely 
+result in the best utilization of resources and performance. Remember, each ITL requires approximately 23 bytes in the block header.
+PCTFREE AND INITRANS attributes of table can be changed anytime through alter statment.
+INITRANS attributes of index can be changed anytime,but pctfree attributes can only changed through rebuild statment.
+31:what the difference between 'extent management' and 'segment space management'?
+extent management in the context of your list above is how extents are managed (allocated and deallocated) in the database. 
+Using dictionary managed tablespaces (do NOT use these, they should NOT be used) we manage a list of free extents in a table sys.fet$. 
+We manage used extents, extents allocated to segments in sys.uet$. 
+To deallocate an extent - we in general lock fet$ and uet$ and delete from uet$ and insert into fet$ and then commit (in a recursive transaction). 
+If you drop a table with 1,000 extents - we do that operation 1,000 times - it is quite expensive. 
+Using locally managed tablespaces - we manage the allocation and deallocation of extents via a bitmap in the data file header itself. 
+Less serialization (many bitmaps versus one set of tables) and faster (just flip a bit, less work).
+To drop a table with 1,000 extents takes no time at all, extent allocation and deallocation is quite cheap relatively speaking. 
+Segment space management is to do with the way blocks in a segment (over all extents) are managed. 
+With manual segment space management - we keep a list (or set of lists if you are using freelist groups) of blocks that have space on them available for insertions. 
+With automatic segment space management (ASSM), we use bitmaps inside of the segment itself - 
+some of the blocks in the segment contain OUR data - not yours
+So, extent management is about managing the allocation and deallocation of extents. 
+Segement space management is about managing what blocks are available for inserts (blocks with free space on them) 
+32:cache buffer lru chain latch
+The cache buffer lru chain latch is acquired in order to introduce a new block into the buffer cache  and when writing a buffer back to disk, specifically when trying to scan the LRU (least recently used) chain  containing all the dirty blocks in the buffer cache. 
+cache buffers lru chain latch争用的最重要的原因是过多请求空闲缓冲区。
+data buffer过小或检查点周期过短时，也会增加cache buffers lru chain latch争用；但是现在的数据库的data buffer都不会太小,而检查点周期一般使用缺省值，所以通常定位cache buffers lru chain latch的原因还是在低效的SQL语句上
+33:在使用語句
+alter table table_name move partition partition_name  tablesspace tb_name;
+move完分區表的表空間后,其默認的表空間還是原來的,如果後續在新增新的分區,新分區的表空間還將在原來表空間上,此時可通過
+如下語句修改表的默認表空間(分區索引葉一樣)
+ALTER table table_name modify default attributes tablespace tb_name;
+34:差看ORACLE GRANULE大小
+SELECT * FROM v$SGA_DYNAMIC_COMPONENTS
+35:Log file sync過高
+1.Commit太過平凡
+2.log file sync和log file parallel write可以说是相互关联的。
+换句话讲，如果log file parallel write的时间很长，那么必然导致log file sync等待时间拉长。
+(2.1存儲有問題導致log file parallel write時間過長導致log file sync等待過高.----ACTION:優化存儲
+ 2.2CPU過高導致LGWR進程花費太多的時間在CPU等待執行的隊列里等待得到CPU去執行LGWR.---ACTION:降低CPU使用率
+ 2.3I/O鏈路有問題導致LGWR花費太多的時間在調用OS層的SYSCALL去執行真正的log file parallel write.--ACTION:將REDO LOG FILE放到本機)
+注:KILLDB遇到的現象為光纖口鬆動導致I/O鏈路層花費太多的時間去通知OS層調用SYSCALL執行log file parallel write.
+36:Fatal NI connect error 12170(11g 中是个bug,)
+这个问题是由于Automatic Diagnostic Repository中的 Oracle Net diagnostic在默认的情况下是开启的，
+当数据库和客户端的连接超过特定时间，就会把这样的信息写入到alert日志中，所以这不是一个致命的问题，
+如果偶尔出现，可以忽略有点类此ora-3136的错误
+Action:
+1.To revert to Oracle Net Server tracing/logging, set following parameter in the server's sqlnet.ora :   
+DIAG_ADR_ENABLED = OFF   
+2.Also, to back out the ADR diag for the Listener component, 
+set following parameter in the server's listener.ora:   DIAG_ADR_ENABLED_<listenername> = OFF      
+- Where the <listenername> would be replaced with the actual name of the configured listener(s) in the listener.ora configuration file.  
+For example, if the listener name is 'LISTENER', the parameter would read:   DIAG_ADR_ENABLED_LISTENER = OFF  
+ -Reload or restart the TNS Listener for the parameter change to take effect. 
+37:PGA(sga -> get blocks -> pga -> get rows/columns -> magic(SORTING&GATHERING) )
+my understanding after reading your posts in this thread , when DML happens ,
+1 ) required block will be sent from SGA to PGA ( if block is not available then DISK to SGA to PGA
+2 ) in PGA , DML will happend
+3 ) modified block will be returned to SGA
+4 ) now user will get successfully completed message
+when SELECT statement executed .. then steps as follows
+1 ) required block will be sent from SGA to PGA ( if block is not available then DISK to SGA to PGA
+2 ) IN PGA , data will be filtered and sent to client but here block will not returned back as we did not change anything.
+We do not answer a query in memory - that would never work for a query like "select * from one_hundred_billion_row_table". 
+We use a little pga memory for block management (a LITTLE).
+We use as much pga memory as we are allowed for things like sorting and hashing - in workareas that come and go. 
+We use temp when we cannot do everything we need in memory. For a query like I just described - 
+we would need a teeny tiny bit of memory - measured in double digit kilobytes. 
+For some queries against smaller tables we might need mb's or gb's of RAM/temp space. It all depends. 
+对于PGA的监控与调整，可以通过下列视图作为参考
+  v$pgastat
+  v$pga_target_advice
+  v$pga_target_advice_histogram
+  http://www.knowsky.com/385082.html
+38:如果表中有數據且此錶有PK約束,在對這種表進行會導致索引失效的維護時,此表中PK的索引段rebuild online將會節約大量時間.
+例子:表壓縮后27G,刪除PK約束及索引后重建,3小時36分才建立OK.等繼續等待中
+ALTER TABLE ZZMLB21_MLBII.R_SMT_MATRIX ADD (
+  CONSTRAINT PK_R_SMT_MATRIX_ID2
+  PRIMARY KEY
+  (ID_2)
+  USING INDEX (CREATE INDEX ZZMLB21_MLBII.IDX_R_SMT_MATRIX_ID2 ON ZZMLB21_MLBII.R_SMT_MATRIX
+(ID_2)
+NOLOGGING
+TABLESPACE I_PANEL_OTHER_ID
+PARALLEL 6));
+39:Difference between connection,session,process
+A connection is a physical circuit between you and the database. A connection might be one of many types -- most popular begin DEDICATED server and SHARED server. 
+Zero, one or more sessions may be established over a given connection to the database as show above with sqlplus. 
+A process will be used by a session to execute statements. Sometimes there is a one to one relationship between CONNECTION->SESSION->PROCESS (eg: a normal dedicated server connection). 
+Sometimes there is a one to many from connection to sessions (eg: like autotrace, one connection, two sessions, one process). 
+A process does not have to be dedicated to a specific connection or session however, for example when using shared server (MTS), 
+your SESSION will grab a process from a pool of processes in order to execute a statement. When the call is over, that process is released back to the pool of processes.
+40:WWN
+1.cd /sys/class/fc_host有host0和host1两个目录,说明有两个HBA卡,分别进入目录
+cat port_name-->0x2100001a32096e41即为WWN号.
+2.systool -cfc_host命令用来查看Linux系统中已安装的HBA的配置信息：
+echo “1” >/sys/class/fc_host/host1/issue_lip
+echo “1” >/sys/class/fc_host/host2/issue_lip
+echo “1” >/sys/class/fc_host/host3/issue_lip
+echo `- - -` >/sys/class/scsi_host/host*/scan  
+[root@zz-hrdb02 ~]# systool -cfc_host -v|grep -iE "port_|class|fabric"----E正則表達式 
+                    p2000中的HOST ID就是FABRIC_NAME
+Class = "fc_host"PROPERTY_04
+  Class Device = "host0"
+  Class Device path = "/sys/class/fc_host/host0"
+    port_id             = "0x110900"
+    port_name           = "0x500143801874d9ec"
+    port_state          = "Online"
+    port_type           = "NPort (fabric via point-to-point)"
+    supported_classes   = "Class 3"
+  Class Device = "host1"
+  Class Device path = "/sys/class/fc_host/host1"
+    port_id             = "0x120900"
+    port_name           = "0x500143801874da28"
+    port_state          = "Online"
+    port_type           = "NPort (fabric via point-to-point)"
+    supported_classes   = "Class 3"
+由上面systool -cfc_host的命令输出结果可以看出，系统中安装了二块HAB卡，对应的名称分别是:host0,host1
+port_name是HBA卡的WWN号,由HBA卡的port_id号可以判断它所连接的SAN Switch的Domain ID及portindex:
+host0的port ID是0x110900,由此判定它所连接的SAN Switch的Domain ID是17(除去OX前2位,16進制11為10進制的17)，portindex是9(除去OX的3,4位)
+host1的port ID是0x120900,由此判定它所连接的SAN Switch的Domain ID是18(除去OX前2位,16進制12為10進制的18)，portindex是9(除去OX的3,4位)
+使用telnet連接到SANSWITCH:
+telnet 10.195.229.151
+F_SFCSW1:FID128:admin> domainsshow
+Number of domains: 1
+17
+得到此SANSWITCH的Domain ID是17
+F_SFCSW1:FID128:admin> switchshow|grep "50:01:43:80:18:74:d9:ec"
+  9   9   110900   id    N8   Online      FC  F-Port  50:01:43:80:18:74:d9:ec
+50:01:43:80:18:74:d9:ec是host0的WWN号,由上面的输出信息可以看出这个HAB卡连接在SAN Switch的slot1 blade的9物理端口,portindex是9,
+port_id是110900.这些信息与在Linux系统中查看到的数据是一致的.
+主机的HBA卡连接到SAN Switch的端口信息已经知道了，接下来查看zone的信息，判定主机与哪个存储相连.
+在这里要提醒的是在配置zone时,一定要注意zone名字的选择,做到见名知意,zone名最好包含主机名与存储标识符.
+创建zone时可以使用端口号(或者portidex),也可以使用WWN.本例中,zone成员使用的portindex号.
+[root@Redhat ~]# multipath -ll | more
+mpath6 (3600c0ff00014bce3b85a5f5301000000) dm-4 HP,P2000 G3 FC
+[size=93G][features=1 queue_if_no_path][hwhandler=0][rw]
+\_ round-robin 0 [prio=50][active]
+ \_ 0:0:5:1 sdah       66:16  [active][ready]
+\_ round-robin 0 [prio=10][enabled]
+ \_ 0:0:4:1 sdag       66:0   [active][ready]
+ 在上面的输出结果中可以看出,一个HBA卡提供二条路径,
+ 每条路径前面的第一個数字代表的上HBA卡的编号,0(0:0:5:1中的第一個0),表示是host0, 1,表卡示是host1.(例如1:0:0:0表示scsi host1:bus0:target0:lun0)
+ 每条路径前面的第三個数字代表的是存儲上的FC_PORT的serial_number编号的第二位如(247000c0ff14ab34,257000c0ff14ab34),
+ 注:FC_PORT的serial_number编号可以通過存儲管理機--->PHYSICAL--->ENCLOSURE --->Rear Graphical---->click Fc_port得到
+ 5(0:0:5:1中的第一個0),4(0:0:4:1中的第一個0),分別代表2個存儲端的HBA卡.
+ 每条路径前面的第四個数字代表的是存儲上的LUN编号.
+ 
+/dev/mapper/mpathn 是multipath虚拟出来的多路径设备，我们应该使用这个设备；
+/dev/mpath/mpathn 是udev设备管理器创建的，实际上就是指向下面的dm-n设备，仅为了方便，不能用来挂载；
+/dev/dm-n 是软件内部自身使用的，不能被软件以外使用，不可挂载。
+
+简单来说，就是我们应该使用/dev/mapper/下的设备符。对该设备即可用fdisk进行分区，或创建为pv。
+41:expdp單個用戶和impdp匯出用戶后,發現此用戶的對象權限丟失.
+grant object privilege 只有在导入该object才会应用这些grant命令
+比如，在scott用户下 grant select on dept to nap3;
+导出用户scott和nap3, 然后删除他们
+这是导入nap3用户，是不会看到具有select dept的权限的（即使这时scott用户没有被删除也一样）
+只有导入scott用户后，这时去检查nap3的user_tab_privs， 就发现有select dept的权限了
+42:SQLNET.LOG中出現如下報錯(SQLNET.LOG的作用可以參考$ORACLE_HOME/network/admin/samples/sqlnet.ora)
+***********************************************************************
+Fatal NI connect error 12541, connecting to:
+ (DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=10.172.113.113)(PORT=1529))(CONNECT_DATA=(SERVER=dedicated)(SERVICE_NAME=idpehr)(CID=(PROGRAM=oracle)(HOST=zzbi)(USER=oracle))))
+  VERSION INFORMATION:
+        TNS for Linux: Version 10.2.0.5.0 - Production
+        Oracle Bequeath NT Protocol Adapter for Linux: Version 10.2.0.5.0 - Production
+        TCP/IP NT Protocol Adapter for Linux: Version 10.2.0.5.0 - Production
+  Time: 08-52014 09:01:51
+  Tracing not turned on.
+  Tns error struct:
+    ns main err code: 12541
+    TNS-12541: TNS:    ns secondary err code: 12560
+    nt main err code: 511
+    TNS-00511:     nt secondary err code: 111
+    nt OS err code: 0
+發現因數據庫中建有DBLINK,而此DBLINK用到以上連接信息,但此IP對應的主機無此service導致報錯.
+ACTION:刪除此DBLINK后不會在產生報錯信息
+43:Oracle11g默认目录结构 
+admin:目前存放创建数据库的脚本，以前的alertlog已经不在这个地方了。
+cfgtoollogs:下面分了目录分别存放当运行dbca，dbua，emca，netca等图形化配置程序时的log。
+diag：是一个重组之后的目录，详细看一下其中的子目录，基本上Oracle每个组件都有了自己单独的目录，在Oracle10g中我们一直诟病的log文件散放
+在四处的问题终于得到解决，无论是asm还是crs还是rdbms，所有组件需要被用来诊断的log文件都存放在了这个新的目录下。
+flash_recovery_area:在Oracle10g中就已经存在，没什么多说的。
+oradata:存放数据文件。
+product:仍然是Oracle RDBMS的软件存放目录。
+44:Flash recovery area&Fast recovery area(从Oracle 11gR2开始oracle已经将 flash recovery area更名为fast recovery area,这是为了消除
+与 flashback database 之间的混淆)
+■如果您在测试环境中启用了闪回恢复区，那么一定要注意监控空间的使用.
+select * from v$recovery_file_dest ;
+select NAME,SPACE_LIMIT/1024/1024/1024,SPACE_USED/1024/1024/1024,SPACE_RECLAIMABLE/1024/1024/1024,NUMBER_OF_FILES from v$recovery_file_dest ;
+select * from v$flash_recovery_area_usage; 
+■在生产数据库上一般不太建议启用闪回功能。
+因为，oracle默认将归档日志放到了闪回恢复区中，生产库上事物处理比较频繁的情况下，若是有个大的事物提交，并有频繁的日志切换的话，
+闪回恢复区设定的大小很快就会被用完。闪回恢复区的空间被占满了以后，很严重的后果就是，无法再归档了，整个数据库就会不可用，将直接影响生产系统的运行，
+直到你增大闪回恢复区或转移/删除闪回恢复区里的归档日志,清理出足够空间来继续进行归档为止。在生产库上这是很要命的。
+所以生产库上，启用闪回功能之前一定要做慎重考虑，如果实在要用，
+1:必须要把闪回恢复区放到单独的磁盘上，并将闪回恢复区大小设置为足够大。
+    闪回恢复区主要通过3个初始化参数来设置和管理
+      db_recovery_file_dest：指定闪回恢复区的位置
+      db_recovery_file_dest_size：指定闪回恢复区的可用空间大小
+      db_flashback_retention_target：指定数据库可以回退的时间，单位为分钟，
+        默认1440分钟，也就是一天。当然，实际上可回退的时间还决定于闪回恢复区的大小，
+        因为里面保存了回退所需要的flash log。所以这个参数要和db_recovery_file_dest_size配合修改
+2:要经常经常对其进行监控。（下面只是简单写了一下）
+   使用空间监控：
+      select * from v$recovery_file_dest ;
+      select * from v$flash_recovery_area_usage; 
+   数据库警告日志内容监控：
+      select reason,object_type,suggested_action from dba_outstanding_alerts;
+45:GRANT SELECT VIEW TO ANOTHER USER
+If you create views refenrence tables belongs another schema like B.
+Then you must have the select privilge with option of with grant option of eache table of this views reference.
+If you don't have with grant option you will receive oracle ORA err when you grant select on view  to other users.
+46:修改LINUX主機HOST
+1、修改文件/etc/sysconfig/network
+#vi /etc/sysconfig/network
+ 注意：配置文件中=号前后不能有空格，HOSTNAME=Gentoo-F312-73.ssc中，Gentoo-F312-73为NETBIOS名，
+ 也就是网上邻居和smbtree（来自Samba）能够看到的你这个Linux服务器的主机名。 ssc为域名，需要重启电脑，才可生效。
+2、修改文件/etc/hosts
+     #vi /etc/hosts
+	 
+47.HR&ZZHRHISTORY中用戶通過JDBC連接數據庫,因為未設置回收機制導致單個用戶連接數目過大
+  (1.用戶設置JAVA回收機制.2.提高oracle的process參數值.3.KILL掉用戶連接數過大的INACTIVE SESSION)
+	
+50:SQLCODE =-1 為違反唯一約束
+ 此語句執行不成功為插入的重複值導致的,且不是你發的那條語句.你可以使用如下語句定位那條語句導致的:
+     v_errmess :=DBMS_UTILITY.format_error_backtrace||'--'|| DBMS_UTILITY.format_error_stack;
+      Note:
+          DBMS_UTILITY.format_error_backtrace------此包可定位那條語句出錯,
+          DBMS_UTILITY.format_error_stack-------------此包返回語句出錯原因
+51:切換UNDO表空間
+   1.新建新的UNDO表空間
+     create undo tablespace undotbs2 datafile 'E:\oracle\product\oradata\orcl\undotbs02.dbf' size 10M autoextend on next 10M maxsize 500M;
+   2.更改系統UNDO表空間
+     alter system set undo_tablespace='undotbs2' scope=both; 
+   3.查看原来的undo表空间中的undo segment是否都为offline
+     select tablespace_name,segment_name,status from dba_rollback_segs;
+   4.原来undotbs1的undo_segment 都为offline，则可以删除undotbs1.
+     drop tablespace undotbs1 including contents and datafiles;
+52：The COMPATIBLE initialization parameter enables or disables the use of features in the database that affect file format on disk.
+53:目錄權限不斷變更問題:因為用戶ID不一樣導致目錄權限不斷變更
+    id user_name
+54:HP主機更換SPI板后ILO口設置IP后無法PING通,需要清空思科(CISCO)交換機端的緩存
+55:linux中時間戳轉時間命令:date -d '1970-01-01 UTC 1112173761 seconds'
+56.HP SPP(SERVICE PACK FOR PROLIANT)安裝
+   1.系統重啟由鏡像引導:只裝
+   2.系統啟動OK 
+   mount /dev/cdrom /mnt 
+   cd /mnt/hp/begin with s directory
+   ./hpsum   ---------sum=smart update manager
+   HP SUM is a stand-alone tool you can use to install and update firmware, software, and drivers on
+   HP ProLiant servers, and install and update firmware on HP Integrity servers
+   You can download the latest version of HP SUM from the HP website at http://www.hp.com/go/hpsum/download.
+   HP also includes HP SUM in some update bundles, for example HP SPP or HP Integrity bundles.
+57:对于ora-00600 4193/4194错误,通过pfile指定undo_management=maual,然后启库重建undo即可,如下：
+58:因此从DBA反馈的当晚的情况看，和测试的现象看，应该是当晚执行的时候，没有拿到并发，导致语句虽然带有并发参数，但是实际执行的时候没有并发。由于串行，所以执行的时间很长。
+至于为什么没有拿到并行，我们目前对于9i库没有更多的信息来证明这个问题，没有session hist的记录或者别的记录。但是根据以往的经验，当数据库中有多个程序都是并发执行时，抢光了parallel_max_servers，后续有并发的进程就不能用并发进程。且哪怕占用并发度的进程结束后，没有拿到并发度的进程还在执行，此时依旧还是会按照串行的方式继续进行下去，一直到sql执行结束。
+因此，我测试了设置paralle max server为4，先用并发度为4的drop partition语句占用这4个并发度，再运行并发度为8的语句drop 另外一个表的partition，后面运行的这个sql在拿不到并发度之后，会和我们当晚的情况非常一致，会长期处于db file sequential read的等待
+59:RedHat Linux 调整显示 分辨率 方法 
+高级版本 ：sudo system-config-display
+低级版本： sudo redhat-config-xfree86
+或者
+1在桌面环境打开一个终端窗口，运行xvidtune这个命令，用中键拖动VTotal，这时会看见Vertical sync(刷新率)值会变动，调到你自己想要的值(不要太高)，然后按test试一下效果，
+如果没问题的话，按show，将终端窗口上显示的那一行输出记下来。类似这样的语句： 
+　　"1024x768" 94.50 1024 1093 1168 1376 768 769 772 808 +hsync +vsync 
+2编辑/etc/XF86Config(现在的系统多数是/etc/X11/XF86Config或/etc/X11/XF86Config-4)文件，找到Section "Monitor"那段，应该你会看到类似
+　　Modeline "1024x768" 94.50 1024 1093 1168 1376 768 769 772 808 +hsync +vsync 
+3　按照刚才记下来的东西修改其中的数值，改完后保存，然后重起xwindow 
+59：
+with t1 as
+(select weight, rownum rn
+    from (select weight
+            from (select 1 weight
+                    from dual
+                  connect by level < 7
+                  union all
+                  select 1.3
+                    from dual)
+           order by dbms_random.value)),
+t2 as
+(select replace(max(sys_connect_by_path(decode(weight, 1, 0, 1), '>')), '>') original
+    from t1
+   start with rn = 1
+  connect by prior rn = rn - 1)
+select * from t2
+60:EM中文顯示亂碼處理(EM can't review chinese characters on the buttons of EM console)
+   CAUSE:
+   Lacks all or some ALBANWTK.TTF,ALBANWTT.TTF,ALBANWTS.TTF,ALBANWTJ.TTF files under <DB_ORACLE_HOME/jdk/jre/lib/fonts.
+   Action:
+   copy files from host which can review chinese correct to the issue host's direcoty <DB_ORACLE_HOME/jdk/jre/lib/fonts.
+   stop dbconsole 
+   start dbconsole
+   if can't resolve issue the consider doing following operations:
+   1.在$ORACLE_HOME/jdk/jre/lib里找到font.properties文件。把它复制一份，更名为font.properties.bak(备份是个好习惯……);
+   2.在$ORACLE_HOME/jdk/jre/lib里找到font.properties.zh_CN.Redhat文件。复制它，更名为font.properties，把原文件替换掉。
+   3.打开刚替换好的font.properties，在最低下可以看到如下字样：
+     filename.-misc-zysong18030-medium-r-normal--*-%d-*-*-c-*-iso10646-1=/usr/share/fonts/zh_CN/TrueType/zysong.ttf
+     所以要把最后这一行替换为
+	 filename.-misc-zysong18030-medium-r-normal--*-%d-*-*-c-*-iso10646-1=/usr/share/fonts/chinese/TrueType/uming.ttf
+   4.把刚改好的文件复制到一下目录，并替换掉原文件。
+     $ORACLE_HOME/jre/1.4.2/lib
+     $ORACLE_HOME/javavm/lib/ojvmfonts
+   5.emctl stop dbconsole 把em停掉;
+   6.进入$ORACLE_HOME/oc4j/j2ee/oc4j_applications/applications/em/em/cabo/images/cache/zhs把里面的所有GIF文件删除;
+   7.emctl stop dbconsole
+61:dmidecode 查看BIOS版本,主機SN,
+62.mltipath -ll|grep -i mp   vxdisk list -p|grep -i udid
+63:查詢ORACLE中的SQL_TYPE(189:UPSERT-->UPDATE OR INSERT INTO A TABLE 2:INSERT 3:SELECT 6.UPDATE 7.DELETE 47:PL/SQL EXECUTE)
+   select command_type,command_name from V$SQLCOMMAND
+64:HP-UNIX手動修改時間
+設置系統時間
+如果有時間伺服器使用:
+/usr/sbin/ntpdate -us 10.191.130.130 10.191.131.131
+如果沒有:
+date 073113422014
+date -s "2006-11-23"  ----設置年月日
+date -s "22:07:21"    ----設置時分秒
+設置BIOS時間
+hwclock --show 显示bios时间
+hwclock --systohc 将系统时间写入bios
+hwclock --hctosys 将bios时间写入系统
+hwclock --help 显示帮助
+65:vxdisk list show:online invalid
+online = Volume Manager can see the disk
+invalid = Volume Manager does not control the disk
+未初始化:vxdisksetup -i diskname
+after use above same commands如果還不行:
+vxdctl disable  
+vxdctl enable 
+66:Manual trigger Kdump:
+echo c > /proc/sysrq-trigger ----觸發后主機會停止所有相應
+67:alert_log日志中发现大量的ORA-07445与ORA-00108,bdump/文件夹下不断的有trc文件写入
+解决方法：把参数文件里的下面的一句删掉就好了
+（Oracle automatically sets up this XDB service and it uses shared server config.
+If you don't use XDB or related technology, it's safe to disable it.）
+68:AUTO_SPACE_ADVISOR_JOB执行的shrink space CHECK導致索引被鎖定,數據無法插入,進而引起數據庫反映緩慢.
+AUTO_SPACE_ADVISOR_JOB执行的shrink space CHECK与实际执行shrink space道理相同，都会给表或索引加上排他锁.
+69.LANG是针对Linux系统的语言、地区、字符集的设置。
+NLS_LANG是针对Oracle语言、地区、字符集的设置。
+70:使用多基表視圖索引例子及問題----->例子參見---E:/工作記錄/使用多基表視圖索引例子.txt
+視圖別名HINT(index(c CR_N51_01_wip_no))C和視圖別名加表名HINT(index(c.cr_n51_01 CR_N51_01_wip_no))區別,
+前者不進行謂詞推送,後者會,因此前者會產生hash join後者一般為NEST LOOP
+71:OGG DDL 觸發器GGS_DDL_TRIGGER_BEFORE,導致數據庫無法刪除數據文件
+   ACTION:禁用出發器既可.
+   ALTER TRIGGER GGS_DDL_TRIGGER_BEFORE DISABLE;
+   *********錯誤:ORA-00604: error occurred at recursive SQL level 1 一般和觸發器有關係
+   
+72.Word中文字下的波浪線.
+   Word中文字下的波浪線為拼寫和文法的檢查,取消方法為(2007為例子)  校閱---->設定語言----->不使用文法或拼音檢查---->預設置
+   
+73.parted VS  fdisk
+   parted支持2TB以上大硬碟的劃分.(parted 中mkfs不支持ext3文件格式,格式化OK后需要使用像fdisk劃分的盤一樣,使用mkfs.ext3格式化文件系統)
+   fdisk支持2TB一下硬碟的劃分.
+74:本地硬碟自檢(採用直連方式連接的存儲也會被識別為本地存儲,需注意)
+    tune2fs -c -1 -i 0 /dev/name(設置)
+	tune2fs -l /dev/name(檢查,MAXCOUNT -1,INTERVAL TIME 0為OK)
+75:Delphi 中調用存儲過程時使用Sp.Parameters.Refresh;//参数的初始化要放在refresh之后
+導致後臺執行select ******  from all_arguments
+where  PROCEDURE_SCHEMA = :"SYS_B_102" AND PROCEDURE_NAME = :"SYS_B_103" order by :"SYS_B_104" asc, :"SYS_B_105" asc
+消耗OS CPU高.
+Action:注釋掉Sp.Parameters.Refresh;語句
+76:inline SQL語句優化
+     Original Sql:使用HASH_JOIN,且inline view為探測表,有可能使系統使用SWAP
+	        SELECT /*+ index(A,IDX_WIP_FINISH_DATE) INDEX(B,IDX_LOG_RETURN_WIP_ID) USE_NL(A,B)*/
+                       *
+                      FROM MLBRMA.R_RETURN_WIP A, MLBRMA.R_WIP_LOG B
+                     WHERE                                .......................
+                           AND A.CATEGORY_KEY IN
+                                  (SELECT COLUMN_VALUE
+                                     FROM THE (
+                                             SELECT CAST (
+                                                       STRVARLIST (:B5) AS VARTABLETYPE)
+                                               FROM DUAL))
+                           .........................
+	 方法一:VW_NSO_1為系統給inline view起的名字,第一個為VW_NSO_1,第二個為VW_NSO_2,依次類推,
+	        改寫為如下語句后,連接改為NEST LOOP,且inline view 為驅動表
+	          SELECT /*+ LEADDING(VW_NSO_1) index(A,IDX_WIP_FINISH_DATE) INDEX(B,IDX_LOG_RETURN_WIP_ID) USE_NL(A,B)*/
+                       *
+                      FROM MLBRMA.R_RETURN_WIP A, MLBRMA.R_WIP_LOG B
+                     WHERE                                .......................
+                           AND A.CATEGORY_KEY IN
+                                  (SELECT COLUMN_VALUE
+                                     FROM THE (
+                                             SELECT CAST (
+                                                       STRVARLIST (:B5) AS VARTABLETYPE)
+                                               FROM DUAL))
+                           .........................					   
+	 方法二:將inline view當做filter條件使用,會有兩次filter
+	          SELECT /*+ index(A,IDX_WIP_FINISH_DATE) INDEX(B,IDX_LOG_RETURN_WIP_ID) USE_NL(A,B)*/
+                       *
+                      FROM MLBRMA.R_RETURN_WIP A, MLBRMA.R_WIP_LOG B
+                     WHERE                                .......................
+                           AND A.CATEGORY_KEY IN
+                                  (SELECT /*+ NO_UNNEST*/  COLUMN_VALUE
+                                     FROM THE (
+                                             SELECT CAST (
+                                                       STRVARLIST (:B5) AS VARTABLETYPE)
+                                               FROM DUAL))
+                           .........................			
+    方法三:將inline view使用臨時表替換
+	/*此sql運行過慢,雖然有指定HINT,但使用C來指定視圖導致謂詞無法推送,導致sql解析為HASH JOIN,HASH join對WIP_NO上的索引進行index FULL scan創建HASH,消耗資源
+SELECT /*+  index(c CR_N51_01_wip_no)  index(c CR_N51_02_WIP_NO)  index(c CR_N51_03_WIP_NO) index(c CR_N51_04_WIP_NO) index(c CR_N51_05_WIP_NO)*/
+                C.WIP_NO,
+                 C.WIP_NO AS SERIAL_NO,
+                 C.STATION_TYPE AS STATION,
+                 C.TEST_MACHINE_ID AS ID,
+                 C.STATION_CODE AS CODE,
+                 TO_CHAR (C.START_TIME, 'YYYY/MM/DD HH24:MI:SS') BEGIN_TIME,
+                 TO_CHAR (C.STOP_TIME, 'YYYY/MM/DD HH24:MI:SS') END_TIME,
+                 C.IS_TEST_FAIL AS TEST_RESULT,
+                 C.SYMPTOM_CODE AS FAIL_CODE,
+                 C.SYMPTOM_DESC AS FAIL_DESC,
+                 TO_CHAR (C.ADD_DATE, 'YYYY/MM/DD HH24:MI:SS') ADD_DATE,
+                 TO_CHAR (C.EDIT_DATE, 'YYYY/MM/DD HH24:MI:SS') EDIT_DATE,
+                 C.PROPERTY_11 APPLE_ADD_DATE,
+                 C.PROPERTY_07 AS SOFTWAREVERSION
+            FROM ZBCCSD2_CSD2.V_CR_N51 C, HX_RED B
+           WHERE C.WIP_NO = B.TMP_01
+
+/*此sql通過謂詞推送HINT將謂詞推送進視圖,在進行視圖內部掃描時將加上WIP_no條件	   
+SELECT /*+ push_pred(c) */
+                C.WIP_NO,
+                 C.WIP_NO AS SERIAL_NO,
+                 C.STATION_TYPE AS STATION,
+                 C.TEST_MACHINE_ID AS ID,
+                 C.STATION_CODE AS CODE,
+                 TO_CHAR (C.START_TIME, 'YYYY/MM/DD HH24:MI:SS') BEGIN_TIME,
+                 TO_CHAR (C.STOP_TIME, 'YYYY/MM/DD HH24:MI:SS') END_TIME,
+                 C.IS_TEST_FAIL AS TEST_RESULT,
+                 C.SYMPTOM_CODE AS FAIL_CODE,
+                 C.SYMPTOM_DESC AS FAIL_DESC,
+                 TO_CHAR (C.ADD_DATE, 'YYYY/MM/DD HH24:MI:SS') ADD_DATE,
+                 TO_CHAR (C.EDIT_DATE, 'YYYY/MM/DD HH24:MI:SS') EDIT_DATE,
+                 C.PROPERTY_11 APPLE_ADD_DATE,
+                 C.PROPERTY_07 AS SOFTWAREVERSION
+            FROM ZBCCSD2_CSD2.V_CR_N51 C, HX_RED B
+           WHERE C.WIP_NO = B.TMP_01
+
+/*此SQL,通過視圖別名加表的證實名稱的HINT可簡介實現謂詞推送功能.		   
+SELECT /*+  index(c.cr_n51_01 CR_N51_01_wip_no)  index(c.cr_n51_02 CR_N51_02_WIP_NO)  index(c.cr_n51_03 CR_N51_03_WIP_NO) index(c.cr_n51_04 CR_N51_04_WIP_NO) index(c.cr_n51_05 CR_N51_05_WIP_NO)*/
+                C.WIP_NO,
+                 C.WIP_NO AS SERIAL_NO,
+                 C.STATION_TYPE AS STATION,
+                 C.TEST_MACHINE_ID AS ID,
+                 C.STATION_CODE AS CODE,
+                 TO_CHAR (C.START_TIME, 'YYYY/MM/DD HH24:MI:SS') BEGIN_TIME,
+                 TO_CHAR (C.STOP_TIME, 'YYYY/MM/DD HH24:MI:SS') END_TIME,
+                 C.IS_TEST_FAIL AS TEST_RESULT,
+                 C.SYMPTOM_CODE AS FAIL_CODE,
+                 C.SYMPTOM_DESC AS FAIL_DESC,
+                 TO_CHAR (C.ADD_DATE, 'YYYY/MM/DD HH24:MI:SS') ADD_DATE,
+                 TO_CHAR (C.EDIT_DATE, 'YYYY/MM/DD HH24:MI:SS') EDIT_DATE,
+                 C.PROPERTY_11 APPLE_ADD_DATE,
+                 C.PROPERTY_07 AS SOFTWAREVERSION
+            FROM ZBCCSD2_CSD2.V_CR_N51 C, HX_RED B
+           WHERE C.WIP_NO = B.TMP_01
+Summary:視圖別名HINT(index(c CR_N51_01_wip_no))C和視圖別名加表名HINT(index(c.cr_n51_01 CR_N51_01_wip_no))區別,
+        前者不進行謂詞推送,後者會,因此前者會產生hash join後者一般為NEST LOOP
+
+TRACE FILE COMPARE
+3  NESTED LOOPS  (cr=280 pr=0 pw=0 time=2069 us)
+      1   TABLE ACCESS FULL HX_RED (cr=7 pr=0 pw=0 time=29 us)
+      3   VIEW  V_CR_N51 (cr=273 pr=0 pw=0 time=2047 us)
+      3    UNION ALL PUSHED PREDICATE  (cr=273 pr=0 pw=0 time=2045 us)
+      0     PARTITION RANGE ALL PARTITION: 1 35 (cr=54 pr=0 pw=0 time=284 us)
+      0      TABLE ACCESS BY LOCAL INDEX ROWID CR_N51_01 PARTITION: 1 35 (cr=54 pr=0 pw=0 time=264 us)
+      0       INDEX RANGE SCAN CR_N51_01_WIP_NO PARTITION: 1 35 (cr=54 pr=0 pw=0 time=206 us)(object id 183372)
+      0     PARTITION RANGE ALL PARTITION: 1 35 (cr=54 pr=0 pw=0 time=262 us)
+      0      TABLE ACCESS BY LOCAL INDEX ROWID CR_N51_02 PARTITION: 1 35 (cr=54 pr=0 pw=0 time=245 us)
+      0       INDEX RANGE SCAN CR_N51_02_WIP_NO PARTITION: 1 35 (cr=54 pr=0 pw=0 time=192 us)(object id 183464)
+      0     PARTITION RANGE ALL PARTITION: 1 35 (cr=54 pr=0 pw=0 time=1240 us)
+      0      TABLE ACCESS BY LOCAL INDEX ROWID CR_N51_03 PARTITION: 1 35 (cr=54 pr=0 pw=0 time=1167 us)
+      0       INDEX RANGE SCAN CR_N51_03_WIP_NO PARTITION: 1 35 (cr=54 pr=0 pw=0 time=773 us)(object id 183556)
+      3     PARTITION RANGE ALL PARTITION: 1 35 (cr=57 pr=0 pw=0 time=252 us)
+      3      TABLE ACCESS BY LOCAL INDEX ROWID CR_N51_04 PARTITION: 1 35 (cr=57 pr=0 pw=0 time=277 us)
+      3       INDEX RANGE SCAN CR_N51_04_WIP_NO PARTITION: 1 35 (cr=54 pr=0 pw=0 time=203 us)(object id 183648)
+      0     PARTITION RANGE ALL PARTITION: 1 35 (cr=54 pr=0 pw=0 time=262 us)
+      0      TABLE ACCESS BY LOCAL INDEX ROWID CR_N51_05 PARTITION: 1 35 (cr=54 pr=0 pw=0 time=249 us)
+      0       INDEX RANGE SCAN CR_N51_05_WIP_NO PARTITION: 1 35 (cr=54 pr=0 pw=0 time=192 us)(object id 183740)
+      
+0  HASH JOIN  (cr=0 pr=0 pw=0 time=2 us)
+      1   TABLE ACCESS FULL HX_RED (cr=7 pr=0 pw=0 time=39 us)
+      3   VIEW  V_CR_N51 (cr=1870380 pr=1 pw=0 time=18970856 us)
+      3    UNION-ALL  (cr=1870380 pr=1 pw=0 time=17073782 us)
+      3 PARTITION RANGE ALL PARTITION: 1 35 (cr=1870380 pr=1 pw=0 time=15176707 us)
+      3   TABLE ACCESS BY LOCAL INDEX ROWID CR_N51_01 PARTITION: 1 35 (cr=1870380 pr=1 pw=0 time=13279659 us)
+      3   INDEX FULL SCAN CR_N51_01_WIP_NO PARTITION: 1 35 (cr=8853 pr=0 pw=0 time=5682 us)(object id 183372)
+      0     PARTITION RANGE ALL PARTITION: 1 35 (cr=0 pr=0 pw=0 time=0 us)
+      0      TABLE ACCESS BY LOCAL INDEX ROWID CR_N51_02 PARTITION: 1 35 (cr=0 pr=0 pw=0 time=0 us)
+      0       INDEX FULL SCAN CR_N51_02_WIP_NO PARTITION: 1 35 (cr=0 pr=0 pw=0 time=0 us)(object id 183464)
+      0     PARTITION RANGE ALL PARTITION: 1 35 (cr=0 pr=0 pw=0 time=0 us)
+      0      TABLE ACCESS BY LOCAL INDEX ROWID CR_N51_03 PARTITION: 1 35 (cr=0 pr=0 pw=0 time=0 us)
+      0       INDEX FULL SCAN CR_N51_03_WIP_NO PARTITION: 1 35 (cr=0 pr=0 pw=0 time=0 us)(object id 183556)
+      0     PARTITION RANGE ALL PARTITION: 1 35 (cr=0 pr=0 pw=0 time=0 us)
+      0      TABLE ACCESS BY LOCAL INDEX ROWID CR_N51_04 PARTITION: 1 35 (cr=0 pr=0 pw=0 time=0 us)
+      0       INDEX FULL SCAN CR_N51_04_WIP_NO PARTITION: 1 35 (cr=0 pr=0 pw=0 time=0 us)(object id 183648)
+      0     PARTITION RANGE ALL PARTITION: 1 35 (cr=0 pr=0 pw=0 time=0 us)
+      0      TABLE ACCESS BY LOCAL INDEX ROWID CR_N51_05 PARTITION: 1 35 (cr=0 pr=0 pw=0 time=0 us)
+      0       INDEX FULL SCAN CR_N51_05_WIP_NO PARTITION: 1 35 (cr=0 pr=0 pw=0 time=0 us)(object id 183740)
+	          
+			  
+    參考信息:
+  select fetches,fetches/executions,executions,DISK_READS,BUFFER_GETS,BUFFER_GETS/executions,cpu_time,cpu_time/executions,sql_id 
+from V$sqlarea where sql_id in ('46tg1s6tths5r')
+    1    1    1    0    3611457     3611457    5815117    5815117    aqkqwv121xgkg---original
+    1    1    1    0    3804090     3804090    5964093    5964093    46tg1s6tths5r----LEANG
+    1    1    1    0    3611457     3611457    6485014    6485014    g02m6f3jwcvt3----IN 	
+77:Leading swap_join_inputs(hash_join可以通过no_swap_join_inputs/swap_join_inputs来强制控制build表)
+   /*+ leading(t1 t2 t3 t4) use_hash(t2) use_hash(t3) swap_join_inputs(t3) use_hash(t4) no_swap_join_inputs(t4)*/
+   说明首先使用t1做驱动表来连接t2,如何连接呢？看后面的hint use_hash(t2),代表连接t2的方式是hash_join;
+   然后用use_hash(t3)表示连接t3的方式是hash-join,那么谁作build表呢？
+   看后面的swap_join_inputs(t3)代表t3作build表和t1-t2的结果集作连接....依此类推~
+   driving_site:通过driving_site强制指定主驱动表,即以所指定的表为主要表,将其它表作为从表提取到驱动表所在的库进行关联运算.
+78:
+  1.嵌套循环（Nested  Loops （NL））：
+        嵌套循环实现机制(伪代码)：
+          For r1 in (select rows from table_1 where colx={value})
+          loop
+                for r2 in (select rows from table_2 that match current row from table_1)
+               loop
+                  output values from current row of table_1 and current row of table_2;
+               end loop;
+          End loop;
+   这段代码由两个循环构成。
+   嵌套循环中的这两个表通常称为外部表（outer table)和内部表(inner table)。
+   在嵌套循环连接中,外部表又称为驱动表(driver table)
+  伪代码中：table_1为驱动表，table_2为内表
+   
+   2绝大多数情况下，hash join效率比其他join方式效率更高：     
+   在Sort-Merge Join(SMJ)，两张表的数据都需要先做排序，然后做merge。因此效率相对最差；     
+   Nested-Loop Join(NL)效率比SMJ更高。特别是当驱动表的数据量很大（集的势高）时。这样可以并行扫描内表。     
+   Hash join效率最高，因为只要对两张表扫描一次。      
+   Hash join一般用于一张小表和一张大表进行join时。Hash join的过程大致如下（下面所说的内存就指sort area，关于过程，后面会作详细讨论）：
+   1.一张小表被hash在内存中。因为数据量小，所以这张小表的大多数数据已经驻入在内存中，剩下的少量数据被放置在临时表空间中；
+   2.每读取大表的一条记录，就和小表中内存中的数据进行比较，如果符合，则立即输出数据（也就是说没有读取临时表空间中的小表的数据）。
+   而如果大表的数据与小表中临时表空间的数据相符合，则不直接输出，而是也被存储临时表空间中。
+   3.当大表的所有数据都读取完毕，将临时表空间中的数据以其输出。
+   no_unnest:unnest我们称为对子查询展开，顾名思义，就是别让子查询孤单地嵌套(nest)在里面。
+             所以un_unnest双重否定代表肯定，即让子查询不展开，让它嵌套(nest)在里面。
+   push_subq:那么push_subq就是为了让子查询最先进行join.
+   no_unnest/unnest是针对子查询是否展开的，push_subq是针对子查询的连接顺序的，push_pred则是针对unmergeable view使用外部查询谓词
+The OPT_PARAM hint can be specified more than once Time to adjust more than one parameter at once as follows:
+/*+ OPT_PARAM('_always_semi_join' 'off')
+      OPT_PARAM('_b_tree_bitmap_plans' 'false')
+      OPT_PARAM('query_rewrite_enabled' 'false')
+      OPT_PARAM('_new_initial_join_orders' 'false')
+      OPT_PARAM('optimizer_dynamic_sampling' 1)
+      OPT_PARAM('optimizer_index_cost_adj' 1) */
+79:Leading&Lag fuction:
+   LEAD is an analytic function. It provides access to more than one row of a table at the same time without a self join. 
+   Given a series of rows returned from a query and a position of the cursor, 
+   LEAD provides access to a row at a given physical offset beyond that position.
+   Lag的返回結果與LEAD相反(lead從小到大,Lag從大到小)
+   Point:lead(column_name,offset,value)---->指定要偏移的列及要偏移的值,
+         OVER (PARTITION BY COLUMN_NAME ORDER BY hire_date)---->ORDER BY hire_date指定偏移列的順序,
+		 
+80:在ORACLE左右連接中:
+   沒有(+)的一邊的表為連接主端,此端表中數據無論是否在連接中有匹配都必須全部顯示.
+   有(+)的一邊表只顯示符合連接條件的數據.
+   (+)不再表中數據全顯示,在的只顯示符合條件的
+	
+81:通過v$SESSION表判斷長時間連接但沒活動的SESSION
+LOGON_TIME 是一个日期型（Date）字段，为用户登陆时间；
+LAST_CALL_ET是一个数字型（Number）字段，其含义是用户最后一条语句执行完毕后到sysdate的时间，单位为秒。每次用户执行一个新的语句后，该字段复位为0，
+重新开始记数。我们可以通过该字段来获得一个连接用户最后一次操作数据库后的空闲时间。
+select ses.username,ses.machine,ses.program,ses.last_call_et,sql.hash_value,sql.sql_text
+         from v$session ses, v$sql sql
+         where ses.sql_hash_value = sql.hash_value
+         and ses.last_call_et > 600
+         and ses.type = 'USER'
+82:SGA RESIZE CAUSE LATCH FREE WAIT:
+Workaround:可以设置_memory_broker_stat_interval参数,定义了每次进行resize的时间(可能调整或不调整),default为30秒.在v$sga_resize_ops表现了resize的操作. 
+83.ORA-01019
+84.OGG ERROR:ogg mgr process don't automatically delete trail file.
+  because extract process have two remote trail file records in mgr'file as below:
+  Remote Trail Name Seqno RBA Max MB 
+   /oggdata/ogg/ext_dmp2_e2/e1 0 0 200 
+   ./ext_dmp2_e2/e1 7501 70382418 200 
+  we need to delete first record /oggdata/ogg/ext_dmp2_e2/e1 from mgr's file using "delete rmttrail /oggdata/ogg/ext_dmp2_e2/e1"
+  Step resolve this issue:
+  1.stop extract
+  2.delete rmttrail /oggdata/ogg/ext_dmp2_e2/e1
+  3.start extract
+  4.stop mgr 
+  5.start mgr
+  
+85.linux内核版本号格式 
+    major.minor.patch-build.desc
+　　1、major：表示主版本号，有结构性变化时才变更。
+　　2、minor：表示次版本号，新增功能时才发生变化;一般奇数表示测试版，偶数表示生产版。
+　　3、patch：表示对次版本的修订次数或补丁包数。
+　　4、build：表示编译(或构建)的次数，每次编译可能对少量程序做优化或修改，但一般没有大的(可控的)功能变化。
+　　5、desc：用来描述当前的版本特殊信息;其信息由编译时指定，具有较大的随意性，但也有一些描述标识是常用的，比如：
+　　<1>rc(有时也用一个字母r)，表示候选版本(release candidate)，rc后的数字表示该正式版本的第几个候选版本，
+    多数情况下，各候选版本之间数字越大越接近正式版。
+　　<2>smp，表示对称多处理器(Symmetric MultiProcessing)。
+　　<3>pp，在Red Hat Linux中常用来表示测试版本(pre-patch)。
+　　<4>EL，在Red Hat Linux中用来表示企业版Linux(Enterprise Linux)。
+　　<5>mm，表示专门用来测试新的技术或新功能的版本。
+　　<6>fc，在Red Hat Linux中表示Fedora Core。
+
+86:如何處理網卡漂移問題
+1.識別誰是誰:从交换机拉一根网线，从上到下挨个接到网卡上面，注意每次只能接一个网卡，接上后通过ethtool命令来查看是否连着网线
+看到了eth0的状态为连接着网线。如果Linked detected:no,则说明没有连接网线。如此区分开哪个设备的名字是什么，标注好。
+2.获取每个网卡的MAC地址:ifconfig  -a | grep HWaddr拿到了每个网卡的MAC地址
+3.进行MAC和网卡名称绑定:对于RedHat的系统，网络的配置文件在:/etc/sysconfig/network-scripts/ifcfg-ethX中存着，X=0，1，2。。。
+里面添加MAC地址绑定和名字的配置信息 
+DEVICE=ethn 
+HWADDR=MAC1（比如00:30:48:7f:b5:ca）
+当对所有网卡实现绑定后，reboot系统，应该就可以了。
+还有一点需要注意，就是驱动对应关系的文件:/etc/modprobe.conf 
+要在该文件中修改，确保某个设备使用的就是对应它的驱动，比如:
+cat /etc/modprobe.conf
+alias eth0 forcedeth
+alias eth1 forcedeth
+alias scsi_hostadapter aic79xx
+alias scsi_hostadapter1 sata_nv
+alias scsi_hostadapter2 usb-storage
+alias eth2 e1000
+alias eth3 e1000
+说明eth0和eth1用的forcedeth的驱动，eth2和eth3用的是e1000的驱动。
+
+
+87:linux下查看端口號是否被使用
+  cat /etc/services |grep -i port_number
+  
+88:em啟動報錯
+check emdb.nohup
+—– Mon Nov 30 09:48:50 2009::Console Launched with PID 27051 at time Mon Nov 30 09:48:50 2009 
+—– 09/11/30 09:48:53 Error starting ORMI-Server. Unable to bind socket: Address already in use
+(pid=25974): emagent now exiting normally
+check emdctl.trc
+2009-11-30 09:45:10 Thread-1 WARN http: snmehl_connect: connect failed to (cmict_s3:3938): Connection refused (error = 239)
+2009-11-30 09:46:26 Thread-1 WARN http: snmehl_connect: connect failed to (cmict_s3:3938): Connection refused (error = 239)
+2009-11-30 09:46:48 Thread-1 WARN http: snmehl_connect: connect failed to (cmict_s3:5500): Connection refused (error = 239)
+2009-11-30 09:47:05 Thread-1 WARN http: snmehl_connect: connect failed to (cmict_s3:5500): Connection refused (error = 239)
+2009-11-30 09:47:22 Thread-1 WARN http: snmehl_connect: connect failed to (cmict_s3:5500): Connection refused (error = 239)
+2009-11-30 09:47:39 Thread-1 WARN http: snmehl_connect: connect failed to (cmict_s3:5500): Connection refused (error = 239)
+2009-11-30 09:47:55 Thread-1 WARN http: snmehl_connect: connect failed to (cmict_s3:5500): Connection refused (error = 239)
+2009-11-30 09:48:16 Thread-1 WARN http: snmehl_connect: connect failed to (cmict_s3:5500): Connection refused (error = 239)
+
+解决方法：
+Cause
+This problem can occur when the ORMI-Server port is already in use by another process.
+Solution
+To resolve this issue, please perform the following steps:
+1. Stop the dbconsole:
+$ORACLE_HOME/<host_sid>/bin/emctl stop dbconsole
+2. Edit the following file
+$ORACLE_HOME/oc4j/j2ee/OC4J_DBConsole_<HOST_SID>/config/rmi.xml
+change the rmi-server port to different port
+For example, change
+<rmi-server port=”5520″
+to
+<rmi-server port=”5521″
+Note: Before changing the check if it is not being used by any process using netstat command
+3. Start the dbconsole
+$ORACLE_HOME/<host_sid>/bin/emctl start dbconsole
+
+
+
+89:RMAN BACKUP REPORT RMAN-60004 AND RMAN-02024:translastion not started when connect database and catalog database;
+MOs had report this is internal error.this error be resoleved after flused catalog database shared_pool;
+
+
+90:TY測試時遇到的VCS相關問題
+1.hagrp -clear ty_cluster清除錯誤后兩個節點的VCS狀態均為OFFLINE時,使用hagrp -online ty_cluster -sys node_name
+2.在大批量DML操作時,如果此時有問題導致數據庫切換,在切換到備機有可能數據庫需要花費大量的時間進行rolling forward或rolling back,
+  有可能觸發VCS中數據庫資源的超時,此時需要將TYPE NAME是ORACLE(不是實例的)的onlinetimeout屬性由300秒改為3000秒.
+
+91:Get special user's procedure or package which running as a scheduler on OS.
+crontab -l|grep -v '#'|awk '{print $7}'|awk -F '>>' '{print $1}'|grep -i '/Data'|xargs egrep -i 'web[^;]+;'
+
+crontab -l|grep -v '#'|egrep -i '/Data.+sh.+log'|awk  '{system("cut " $7)}'
+
+
+92:OGG EXTTRAIL seqno number 達到最大值999999,導致OGG錯誤
+
+93:視圖定義閃回
+declare
+    v_var  varchar(2000);
+    begin 
+    select text into v_var from sys.view$ as of timestamp sysdate-3/24 where obj#=89211;
+   insert into hx_test(v_test) values(v_var);
+   commit;
+    end;
+   /
+94:oracle用戶id不一樣導致VCS切換時目錄權限變更,ORACLE無法啟動
+usermod -u 501 oracle
+usermod -g dba -G dba oracle
+
+95:ORACLE自動收集統計信息的腳本在晚上0點自動終止,報REASON="Stop job called because associated window was closed"
+   SCHEDULER的stop_on_window_close屬性決定scheduler的window结束的时候是否運行還是終止:
+   stop_on_window_close屬性為TRUE的時候,會自動停止(此為默認值)
+   stop_on_window_close屬性為FALSE的時候,不會自動停止
+   查詢與修改stop_on_window_close屬性的方法:
+     查詢:
+        declare
+        v_t boolean;
+        V_T2 VARCHAR2(200);
+        begin
+         DBMS_SCHEDULER.GET_ATTRIBUTE('SYS.GATHER_STATS_JOB','STOP_ON_WINDOW_CLOSE',v_t);
+         IF V_T  THEN
+            V_T2:='TRUE';
+         ELSE
+            V_T2:='FALSE';
+         END IF;
+        DBMS_OUTPUT.PUT_LINE(V_T2);
+        end;
+        /
+     修改:
+	    EXEC DBMS_SCHEDULER.SET_ATTRIBUTE('SYS.GATHER_STATS_JOB','STOP_ON_WINDOW_CLOSE',TRUE)
+
+		
+96:Force Logging,Logging
+1.Force Logging,Logging
+Effect Domain:
+Force Logging/nologging:Database,Tablespace 
+Logging/nologging:objects like tables.
+Funtion:
+Force Logging and Logging will affect database media recovery
+優先等級:
+Database force logging>Tablespace force logging>Object logging
+If database in force logging then operation ignores all nologging attribute.
+If the force logging is enabled at a database level,all the operations happening in the database are logged.
+Operation will ignore tables nologging attribute when table's tablespace in force logging mode and database not in force logging.
+In FORCE LOGGING mode, Oracle Database logs all changes in the database except changes in temporary tablespaces and temporary segments. 
+This setting takes precedence over and is independent of any NOLOGGING or FORCE LOGGING settings 
+you specify for individual tablespaces and any NOLOGGING settings you specify for individual database objects.
+2.Supplemental logging
+Supplemental logging places additional column data into a redo log whenever an operation is performed. 
+A capture process captures this additional information and places it in LCRs. 
+Supplemental logging is always configured at a source database, regardless of location of the capture process 
+that captures changes to the source database.
+ALTER DATABASE ADD SUPPLEMENTAL LOG DATA;
+ALTER DATABASE DROP SUPPLEMENTAL LOG DATA;
+最小(Minimal)补全日志开启后可以使得logmnr工具支持链式行，簇表和索引组织表。可以通过以下SQL检查最小补全日志是否已经开启：
+alter database add supplemental log data (primary key) columns
+alter database add supplemental log data (ALL) columns
+
+97:wait for a undo record
+V$PX_SESSION
+查询视图V$FAST_START_TRANSACTIONS中字段UNDOBLOCKSDONE，UNDOBLOCKSTOTAL估算smon恢复进度
+SELECT undoblockstotal "Total",
+       undoblocksdone "Done",
+       undoblockstotal - undoblocksdone "ToDo",
+       DECODE (
+          cputime,
+          0, 'unknown',
+          TO_CHAR (
+             SYSDATE
+             + ( ( (undoblockstotal - undoblocksdone)
+                  / (undoblocksdone / cputime))
+                / 86400),
+             'yyyy-mm-dd hh24:mi:ss'))
+          "Estimated time to complete",to_char(sysdate,'yyyy-mm-dd hh24:mi:ss')  from v$fast_start_transactions;
+select segment_id, file_id,block_id from DBA_ROLLBACK_SEGS;
+select * from v$fast_start_servers
+观察Oracle内部表x$ktuxe [k]ernel layer [t]ransaction layer [u]ndo transaction [e]ntry 
+select distinct ktuxesiz from x$ktuxe where KTUXESTA='ACTIVE';
+select * from x$ktuxe where ktuxecfl = 'DEAD' and ktuxesta = 'ACTIVE'；		  
+alter system set FAST_START_PARALLEL_ROLLBACK=false
+specifies the degree of parallelism used when recovering terminated transactions.
+Terminated transactions are transactions that are active before a system failure.
+If a system fails when there are uncommitted parallel DML or DDL transactions,
+then you can speed up transaction recovery during startup by using this parameter. 
+Values: 
+FALSE    Parallel rollback is disabled 
+LOW      Limits the maximum degree of parallelism to 2 * CPU_COUNT 
+HIGH     Limits the maximum degree of parallelism to 4 * CPU_COUNT 
+
+98:
+free -m|grep -i swap|awk '{printf "sdfs"}  {if ($2<0) {print $2} else {print "hexin"}}'
+free -m|grep -i swap|awk 'BEGIN {printf "sdfs"} END  {if ($2<0) {print $2} else {print "hexin"}}'
+alter table F3602914.CR_DCS1 modify partition DCS_P201112 deallocate unused keep 4m
+
+latch: cache buffers lru chain
+enq: TX- index contention
+latch free
+
+
+
+99.11.2.0.3密碼的延遲驗證,導致libarary cache lock
+ALTER SYSTEM SET EVENT = '28401 TRACE NAME CONTEXT FOREVER, LEVEL 1' SCOPE = SPFILE
+alter system set event="10949 TRACE NAME CONTEXT FOREVER:28401 trace name context forever, level 1"  scope=spfile;
+[oracle@db2server ~]$ oerr ora 28401
+28401, 00000, "Event to disable delay after three failed login attempts"
+// *Document: NO
+// *Cause: N/A
+// *Action: Set this event in your environment to disable the login delay 
+//          which will otherwise take place after three failed login attempts.
+// *Note: THIS IS NOT A USER ERROR NUMBER/MESSAGE. THIS DOES NOT NEED TO BE
+//        TRANSLATED OR DOCUMENTED.
+ALTER SYSTEM RESET EVENT SCOPE=SPFILE SID='*';
+
+100.RAC在新ASM DISKGOUP上創建TABLESAPCE后數據庫直接宕機,且無法正常啟動.
+This is a bug:Use "PMON * terminating the instance due to error 495" to search in MOS can find.
+exception [type: SIGSEGV, Address not mapped to object] [ADDR:0x7FFF00000001] [PC:0x32DB2797C0, strlen()+16] [flags: 0x0, count: 1]
+Errors in file /oracle/app/oracle/diag/rdbms/zzdw2/zzdw22/trace/zzdw22_gen0_17450.trc  (incident=817314):
+ORA-07445: exception encountered: core dump [strlen()+16] [SIGSEGV] [ADDR:0x7FFF00000001] [PC:0x32DB2797C0] [Address not mapped to object] []
+Incident details in: /oracle/app/oracle/diag/rdbms/zzdw2/zzdw22/incident/incdir_817314/zzdw22_gen0_17450_i817314.trc
+Use ADRCI or Support Workbench to package the incident.
+See Note 411.1 at My Oracle Support for error and packaging details.
+Sun Dec 21 11:58:23 2014
+Dumping diagnostic data in directory=[cdmp_20141221115823], requested by (instance=2, osid=17450 (GEN0)), summary=[incident=817314].
+Completed: ALTER TABLESPACE D_DSD_CSFIS ADD DATAFILE '+FATP_DATA13/zzdw2/datafile/d_dsd_csfis_06.dbf' SIZE 1024M AUTOEXTEND OFF
+PMON (ospid: 17440): terminating the instance due to error 495
+Sun Dec 21 11:58:25 2014
+opiodr aborting process unknown ospid (19624) as a result of ORA-1092
+Sun Dec 21 11:58:25 2014
+ORA-1092 : opitsk aborting process
+Sun Dec 21 11:58:25 2014
+opiodr aborting process unknown ospid (19906) as a result of ORA-1092
+Sun Dec 21 11:58:25 2014
+ORA-1092 : opitsk aborting process
+Sun Dec 21 11:58:26 2014
+ORA-1092 : opitsk aborting process
+Sun Dec 21 11:58:26 2014
+ORA-1092 : opitsk aborting process
+Sun Dec 21 11:58:27 2014
+ORA-1092 : opitsk aborting process
+Instance terminated by PMON, pid = 17440
+ORA-7445 [strlen()+16] creating database dependencies for large number of disk groups" which causes a buffer overflow if the diskgroup 
+dependencies of the database resource exceed a certain size
+workaround:
+Set hidden parameter "_notify_crs" to false, which will prevent the database instance from notifying the CRS daemon process when diskgroups are being mounted:
+set "_notify_crs"=FALSE in pfile or spfile, then restart the database.
+
+
+101:10G RAC srvctl report:
+"jdk/jre/bin/java: error while loading shared libraries: libpthread.so.0: cannot open shared object file: No such file or directory"
+Remove or remark below two rows from srvctl:
+vi srvctl
+#LD_ASSUME_KERNEL=2.4.19
+#export LD_ASSUME_KERNEL
+
+
+102:RAC 
+nodeapps:lsnr  gsd  ons  vip 
+10G RAC 目錄體系結構:
+CRS_HOME/log/hostname/crsd/     - The log files for the CRS daemon CRS_HOME/log/hostname/cssd/ - The log files for the CSS daemon 
+CRS_HOME/log/hostname/evmd/     - The log files for the EVM daemon
+CRS_HOME/log/hostname/client/   - The log files for the Oracle Cluster Registry (OCR) 
+CRS_HOME/log/hostname/racg/     - The log files for the Oracle RAC high availability component
+CRS_HOME/log/hostname/racg/     - The log files for the Oracle RAC high availability component
+CRS_HOME/log/hostanme/alert.log – The alert.log for Clusterware issues.
+1.Oracle集群日志藏匿之处
+Oracle集群涉及的日志主要位于“$ORA_CRS_HOME/log”和“$ORACLE_HOME/log”目录中。
+2.日志目录结构
+RACDB1@rac1 /home/oracle$ tree -d $ORA_CRS_HOME/log
+/oracle/app/crs/log
+|-- crs
+`-- rac1
+    |-- admin
+    |-- client
+    |-- crsd
+    |-- cssd
+    |   |-- oclsmon
+    |   `-- oclsomon
+    |-- evmd
+    `-- racg
+        |-- racgeut
+        |-- racgevtf
+        `-- racgmain
+13 directories
+RACDB1@rac1 /home/oracle$ tree -d $ORACLE_HOME/log
+/oracle/app/oracle/product/10.2.0/db_1/log
+`-- rac1
+    |-- client
+    `-- racg
+        |-- racgeut
+        |-- racgimon
+        |-- racgmain
+        `-- racgmdb
+7 directories
+其中“rac1”是具体的主机名。
+3.日志目录功能说明
+1）CRS日志存放在“$ORA_CRS_HOME/log/<hostname>/crsd”目录，系统会对该日志每10M进行归档一次
+2）CSS日志存放在“$ORA_CRS_HOME/log/<hostname>/cssd”目录，系统会对该日志每20M进行归档一次
+3）EVM日志存放在“$ORA_CRS_HOME/log/<hostname>/evmd”目录；
+4）“$ORA_CRS_HOME/log/<hostname>”和“$ORACLE_HOME/log/<hostname>”目录中的racg目录中记录了RACG可执行文件对应的日志；
+5）“$ORA_CRS_HOME/log/<hostname>/client”和“$ORACLE_HOME/log/<hostname>/client”目录记录了与srvctl、ocrdump、ocrconfig以及ocrcheck命令对应的日志信息。
+4.Oracle集群的alert日志
+类似Oracle实例的alert日志一样，Oracle集群环境中同样存在alert日志文件。该文件位于“在 $ORA_CRS_HOME/log/<hostname>”目录下，命名规则为“alert<nodename>.log”
+该警告日志记录了有关Oracle集群的重要警告信息。
+RACDB1@rac1 /oracle/app/crs/log/rac1$ tail -10f alertrac1.log
+[cssd(10098)]CRS-1610:node rac2 (2) at 90% heartbeat fatal, eviction in 2.178 seconds
+2010-11-15 09:09:11.264
+[cssd(6656)]CRS-1605:CSSD voting file is online: /dev/raw/raw2. Details in /oracle/app/crs/log/rac1/cssd/ocssd.log.
+[cssd(6656)]CRS-1601:CSSD Reconfiguration complete. Active nodes are rac1 rac2 .
+2010-11-15 09:09:14.029
+[evmd(5878)]CRS-1401:EVMD started on node rac1.
+2010-11-15 09:09:14.868
+[crsd(6015)]CRS-1012:The OCR service started on node rac1.
+2010-11-15 09:09:27.545
+[crsd(6015)]CRS-1201:CRSD started on node rac1.
+
+在10gR1中, ASM依赖于vip资源, 而这种依赖是没有必要的, 可以使用如下步骤删除这一资源依赖. 
+1 运行crs_stat -p <ASM resource name> > /tmp/<ASM resource name>.cap 生成asm资源的profile, 放在/etc下, 注意profile的名称为资源名后加".cap". 
+2 编辑/tmp/<ASM resource name>.cap, 删除REQUIRED_RESOURCES属性, 删除VIP资源. 
+3 运行crs_register -u <ASM resource name> -dir /tmp更新ASM资源的profile.
+4 运行crs_stat -p <ASM resource name>验证属性修改. 
+5 每个节点有一个对应的ASM资源, 需要逐一修改. 
+
+
+103:使用UDEV代替MULTIPATH,ASMDISK管理多路徑
+  單個磁盤
+  1.cd /etc/udev/rules.d/
+  2.vi 99-oracle-asmdevices.rules
+    KERNEL=="sd*", BUS=="scsi", PROGRAM=="/sbin/scsi_id -g -u -s %p", RESULT=="360002ac0000000000000001a0000683f", NAME="arch_log", OWNER="oracle", GROUP="dba", MODE="0660"
+  3.udevcontrol reload_rules
+  4.start_udev
+  5.ls /dev/arch_log
+  單個卷
+  1.cd /etc/udev/rules.d/
+  2.  fdisk      /dev/xvdv
+      partprobe  /dev/xvdv
+      partprobe  /dev/xvdv1
+  3.vi 99-oracle-asmdevices.rules
+  KERNEL=="xvdv1", NAME="asmdisk1_udev_p1", OWNER="grid", GROUP="asmadmin", MODE="0660"
+  4.udevcontrol reload_rules
+  5.start_udev
+  select path from v$asm_disk where path like '%udev%';   
+  [root@ty-sfcrep222 ~]# /etc/init.d/oracleasm enable
+  Writing Oracle ASM library driver configuration: done
+  Initializing the Oracle ASMLib driver: [FAILED]
+  [root@ty-sfcrep222 ~]# more /var/log/oracleasm 
+  Creating /dev/oracleasm mount point: /dev/oracleasm
+  Loading module "oracleasm": failed
+  [root@ty-sfcrep222 ~]#  find / -name oracleasm.ko
+  /lib/modules/2.6.18-348.18.1.el5/kernel/drivers/addon/oracleasm/oracleasm.ko
+  [root@ty-sfcrep222 ~]# /sbin/insmod /lib/modules/2.6.18-348.18.1.el5/kernel/drivers/addon/oracleasm/oracleasm.ko
+  [root@ty-sfcrep222 ~]# /etc/init.d/oracleasm status
+  Checking if ASM is loaded: yes
+  Checking if /dev/oracleasm is mounted: no
+  [root@ty-sfcrep222 ~]# /etc/init.d/oracleasm enable
+  Writing Oracle ASM library driver configuration: done
+  Initializing the Oracle ASMLib driver: [  OK  ]
+  Scanning the system for Oracle ASMLib disks: [  OK  ]
+
+104: 11G RAC 安裝數據庫時遇到:INS-35354 will occur when the central inventory entry for the Grid Infrastructure 
+cat /g01/oraInventory/ContentsXML/inventory.xml 增加CRS="true"
+<HOME NAME="Ora11g_gridinfrahome1" LOC="/g01/11.2.0/grid" TYPE="O" IDX="1" CRS="true">
+
+105:Problem 在Linux 上，vxfs 5.1sp1，当删除大量的文件后运行df -k发现df -k 显示需要大约10秒
+Error 使用strace，可以发现在statfs()时，等待了大约10秒
+#strace -tt df -k
+<snip>
+09:55:32.731102 statfs("/test", {f_type=0xa501fcf5, f_bsize=1024, f_blocks=157286400, f_bfree=151408620, f_bavail=141945814, f_files=38017876, f_ffree=37852155, f_fsid={50949, 999}, f_namelen=255, f_frsize=1024}) = 0
+09:55:42.731005 write(1, "/dev/vx/dsk/testdg/testvol\n", 32/dev/vx/dsk/testdg/testvol) = 32
+<snip>
+Environment RedHat 5.4 VxFS 5.1SP1
+Cause 这是一个bug.
+Solution
+1. Workaround
+1) 进行文件系统的remount操作
+# mount -t vxfs -o remount /dev/vx/dsk/testdg/testvol  /test
+2) 执行"sync"命令
+# sync
+2. Solution:
+安装以下补丁:
+s_Lx_5_1SP1RP1HF1_2011-03-16
+s_Lx_5_1SP1RP1HF2_2011-04-08
+s_Lx_5_1SP1RP1HF3_2011-04-15
+s_Lx_5_1SP1RP1HF4_2011-04-28
+s_Lx_5_1SP1RP1HF4_2011-05-04
+s_Lx_5_1SP1RP1HF5_2011-05-05
+
+
+106：hponcfg -a -w /tmp/ilo.txt ilo
+
+107:SFHA 規格計算:https://sort.symantec.com/spvu_calc  或https://sort.symantec.com--->ASSESSMENTS
+
+108：Common scenario is resource in "UNKNOWN" status and can not be stopped or deleted.
+Doc ID 1069369.1  
+
+109：Detected Hardware Unit Hang:
+Mar  2 19:49:43 f-sfc-mlb02 kernel: e1000e 0000:18:00.0: eth6: Detected Hardware Unit Hang:
+Solution:
+However, the cause is wrong; checked in e1000e driver, there is no problem.
+This issue was reported in BZ#746272 and it was fixed in RHEL 5.8 kernel(kernel 2.6.18-308.el5,Upgrade to kernel 2.6.18-308.el5 or higher.).
+
+110：Setting /etc/security/limits.conf's nofile to umlimited cause user can't login.
+limits.conf(5) man page and/or comments in /etc/security/limits.conf warn about not setting "nofile" to "unlimited" or "-1" 
+before admins do stupid things
+
+111:DP備份集的大小等於數據庫文件大小:
+至oracle 10.1版本为止，rman 缺省只有Null compression 这一种压缩方式，从Oracle 10.2版本，rman缺省只有Null compression和Unused Block Compression这两种压缩方式。
+这两种压缩方式是自动做的，不需要额外的命令或者关键字来指定执行。
+  1.Null Compression 在把数据文件备份到备份集的时候，rman不备份从来没被分配过的数据块。 这意味着rman永远不会备份从来没有使用过的数据块。比如:表空间的一个数据文件大小是
+    100MB,其中有50MB被使用过，则rman只会备份50MB。
+  2.Unused Block Compression:从Oracle 10.2版本开始，rman 备份时候不会备份当前没有包含数据的数据块，这叫Unused Block Compression。rman 现在创建一个压缩比更强的数据
+     文件的备份，会不备份当前没有用来存放数据的数据块。
+    在之前的版本，rman只支持NULL compression,即备份时候，只是不备份从来没有使用过的块。DBA在使用这个特性时候，不需要执行额外的命令或使用关键字。比如:表空间的一个数据文件
+ 大小是100MB,其中有50MB被使用过，用户删除了一个25MB的表，那备份时候，使用了Unused Block Compression特性后，只会备份25MB。在这个例子中如果Null compression被使用，
+  那他会备份50MB,因为Null compression备份时候，会判断数据库是否被使用和曾经被使用，如果从来没有被使用，则不备份这些从来没有被使用的块。
+     在满足以下条件的时候，Unused Block Compression会起作用:
+  1.初始化参数COMPATIBLE=10.2或者更新的版本
+  2.数据文件是local的管理模式
+  3.进行全库备份的时候 
+  4.是往磁盘上备份，而不是往带库上备份
+  Unused Block Compression这种方式的备份，会使用比较少的空间，也会使备份时候I/O更高效一些。
+BINARY COMPRESSION:     
+    BINARY COMPRESSION是在使用关键子"AS COMPRESSED" 时候才会起作用的二进制压缩方式。 rman 能够使用二进制压缩算法进行备份。 
+这种备份方式与磁带厂商往磁带上备份的压缩方式类似。 但是不能给出准确的压缩比。这个二进制的压缩算法能够大大的减少备份集所需要的磁盘空间，通常情况下压缩比会达到2-4倍
+使用这种压缩方式的命令如下:
+rman> backup as compressed backupset database;
+1.在使用这种方式压缩时候，会消耗一些CPU资源。如果在一个接近满负荷主机上进行备份，你会发现使用as compressed backupset备份方式的开销几乎是无法接受的。在太多情况下，
+压缩备份集能够节省很多磁盘空间，但是会有一些CPU开销。
+2.在恢复的时候不需要额外的命令操作，跟恢复非压缩的备份集没区别。
+3.从压缩的备份集里面restore 数据文件会比非压缩的备份集花费更多的时间
+
+112:計算數據庫每天增長率
+we used the sql "select * from dba_hist_seg_stat " . 
+the column 'space_used_ total'' may be more accurated than 'db_block_changes_delta' to measure the size of a table. 
+
+
+113：single-task message&libaray cache load lock
+     DB LINK失效,而大量過程及包調用此DBLINK,在全編譯時數據庫出現大量libaray cache load lock
+	 DB LINK失效,在執行時出現single-task message等待事件
+   	 TTS 1457876.1
+	
+115:手動設置統計信息
+   非分區表:(其中的值參考類似的表)
+   exec DBMS_STATS.SET_TABLE_STATS('GLCSD2_RMADB3','R_WIP_LOG_1',numrows=>19344003980,numblks=>497106400,avgrlen=>121)
+   分區表
+   1.導入各個分區信息
+   select 'exec DBMS_STATS.SET_TABLE_STATS(''GLCSD2_RMADB3'','''||TABLE_NAME||''',partname=>'''||PARTITION_NAME||''',numrows=>690857285,numblks=>17753800,avgrlen=>121);'  
+   from dba_tab_statistics where owner='GLCSD2_RMADB3' and table_name='R_WIP_LOG_1' AND PARTITION_NAME IS NOT NULL;
+   2.導入總表信息
+   select sum(NUM_ROWS),sum(BLOCKS) from dba_tab_statistics where owner='GLCSD2_RMADB3' and table_name='R_WIP_LOG' and partition_name is not null
+   exec DBMS_STATS.SET_TABLE_STATS('GLCSD2_RMADB3','R_WIP_LOG_1',numrows=>sum(NUM_ROWS),numblks=>sum(BLOCKS),avgrlen=>121)
+116:ZZ DW應為並行導致2號節點在運行此數據時數據庫宕機:
+    情況:表的創建語句中有：PARALLEL ( DEGREE 1 INSTANCES DEFAULT ) 正常情況下：noparallel
+	AWR報告中的等待事件:latch: parallel query alloc buffer	enq: PS - contention Latch: shared pool
+	ACTION:ALTER TABLE TABLE_NAME NOPARALLEL;
+	並行間接:
+	This also applies if either degree or instances is set to 'default'. Note the following examples:
+     a. DEGREE = 1, INSTANCES = DEFAULT, DOP = (1 * DEFAULT) = DEFAULT
+     b. DEGREE = 3, INSTANCES = DEFAULT, DOP = (3 * DEFAULT) = 3 
+     c. DEGREE = DEFAULT, INSTANCES = DEFAULT, DOP = (DEFAULT * DEFAULT) = DEFAULT
+	 The DEFAULT Degree Of Parallelism is calculated as:
+     CPU_COUNT * PARALLEL_THREADS_PER_CPU
+	 PARALLEL_FORCE_LOCAL controls parallel execution in an Oracle RAC environment. By default, 
+	 the parallel server processes selected to execute a SQL statement can operate on any or all Oracle RAC nodes in the cluster. 
+	 By setting PARALLEL_FORCE_LOCAL to true, the parallel server processes are restricted so that they can only operate on the same 
+	 Oracle RAC node where the query coordinator resides (the node on which the SQL statement was executed on).
+117:root下使用如下方法可用實現在HP-UX上對.profile的調用
+    44 11 * * * su – oracle -c “/check_shell/ins4_t4.sh” >/dev/null 2>&1
+	
+	
+118:WAITEVENT: "cursor: pin S" Reference Note (Doc ID 1310764.1)
+P1為SQL_ID的hash_value select * from V$sqlarea where sql_id=p1
+
+
+119:
+1.ONLINE REDO LOG
+2.統計信息
+3.歸檔模式
+4.表空間擴展
+5.是否使用綁定變數(cursor_sharing用FORCE還是exact,)
+6.undo大小
+
+120:
+SELECT RESOURCE_USAGE, SQL_ID, SQL_TYPE
+     FROM (WITH SQL_COUNT
+                AS (SELECT *
+                      FROM v$active_session_history
+                     WHERE     sample_time > SYSDATE - 320 / 86400
+                           AND sample_time <= SYSDATE
+                           AND sql_id IS NOT NULL)
+             SELECT SQL_iD,
+                    COUNT (SQL_ID),
+                    (SELECT COUNT (*) FROM SQL_COUNT),
+                    ROUND (COUNT (SQL_ID) / (SELECT COUNT (*) FROM SQL_COUNT),
+                           4)
+                    * 100
+                       RESOURCE_USAGE,
+                    DECODE (
+                       sql_opcode,
+                       3, 'SELECT',
+                       6, 'UPDATE',
+                       7, 'DELETE',
+                       2, 'INSERT',
+                       47, 'PL/SQL EXECUTE',
+                       'For more information please reference doc about V$session')
+                       SQL_TYPE
+               FROM SQL_COUNT
+           GROUP BY SQL_COUNT.SQL_iD, sql_opcode
+           ORDER BY COUNT (SQL_ID) DESC);
+		   
+		   
+121:httpd服務無法啟動:
+   1./var/log/httpd/nss_conf.log
+     /var/log/httpd/err_log.log
+   2.根據報錯信息,修改  
+   /etc/httpd/conf.d/nss.conf
+   NSSEnforceValidCerts off
+122:sqlludr在linux上無法運行
+    提示缺少包,為少安裝包,需從別的主機上拷貝過來.并使用export LD_LIBRARY_PATH=指向對應的路徑
+
+123:opatch faied with error code 73&listener status show blocked(instance is mount or in restricted mode,ensure one instance).
+1.listener 2.em 3.db 4.sqlplus  
+How:Processes not exist about those 4 type on linux platform through ps -ef|grep -i * command.  
+
+124:大量的db file parallel read
+可以通过添加隐含参数的方法来屏蔽prefetch功能，从而避免db file parallel read等待事件的产生：
+_db_block_prefetch_limit=0
+_db_block_prefetch_quota=0
+_db_file_noncontig_mblock_read_count=0
+控制文件添加这三个隐含参数后，重启数据库，再次运行压力测试，发现db file parallel read等待事件已经消失：
+
+125:kill scripts
+#!/bin/bash
+source ~/.bash_profile
+rm -rf /tmp/kill1.sh
+sqlplus -S  / as sysdba<<eof
+set wrap off
+set linesize 300
+set feedback off
+set pagesize 6000
+spool /tmp/kill.sh
+select 'kill -9 '||spid from V\$process a,v\$session b
+where B.PADDR=A.ADDR and B.USERNAME LIKE '%WEB%'   and B.program='w3wp.exe'  AND B.LAST_CALL_ET>60 AND B.STATUS='ACTIVE';
+spool off
+exit
+eof
+sed '1,3d' /tmp/kill.sh >/tmp/kill1.sh
+rm -rf /tmp/kill.sh
+
+126:excel中2個sheet求差別
+=IF(COUNTIF([Bobcat未備份機台.xls]Sheet1!$A$2:$A$217,B2),"S","F")
+----範圍匹配合適后,返回另一列的值
+=CONCATENATE(ROUND(VLOOKUP(D92,Sheet2!B2:E109,4,FALSE)/1024/1024,2),"T") VS =concatenate(round(VLOOKUP(D2   ,Sheet2!$B$2:$E$109,4,FALSE)/1024/1024,2),"T")
+B1代表B列1行的那个单元格
+$B$1同样代表B1那个单元格，只不过加上$符号表示绝对引用(絕對應用的值不會遞增)
+
+127:linux下rc.local命令不執行(LINUX 6.6)
+ 通過ilo,看開機畫面發現在開機時會彈出一個組件確認畫面,組件確認超時后不執行rc.local進入系統.因此rc.local下的命令不執行,
+ action.quit此組件
+ 
+128.3par 存儲匯總
+
+
+129:linux上使用sqluldr2_linux64_10204.bin
+    1.以ORACLE用戶上傳sqluldr2_linux64_10204.bin
+	2.chmod 777 sqluldr2_linux64_10204.bin 修改執行權限
+	3../sqluldr2_linux64_10204.bin USER=f3602914/f3602914@10.195.229.120:1526/zzbi  file=./hexin.txt  sql=./hx.txt
+	 hx.txt
+	 select *  from CESBG_OWNER.R_WM_WIP_INFO_T  where product='N61' AND TRUNC(ADD_DATE,'MM') LIKE TRUNC(SYSDATE-10,'MM')
+  
+
+130:Enabling and Disabling Database Options
+1.Shutdown all database instance(s)/service(s) running from the Oracle Database Home
+2.Run the following relink command to disable the option at the binary level: 
+   2.1:make -f ins_rdbms.mk option_switch ioracle
+   2.2:cd $ORACLE_HOME/rdbms/lib
+   2.3:make -f ins_rdbms.mk part_off ioracle
+   Here is the list of database options and switches:
+   Database Option	ON	OFF
+   Data Mining	dm_on	dm_off
+   Data Mining Scoring Engine	dmse_on	dmse_off
+   Database Vault	dv_on	dv_off
+   Label Security	lbac_on	lbac_off
+   Partitioning	part_on	part_off
+   Real Application Clusters	rac_on	rac_off
+   Spatial	sdo_on	sdo_off
+   Real Application Testing	rat_on	rat_off
+   OLAP	olap_on	olap_off
+   Automatic Storage Management	asm_on	asm_off
+   Context Management Text	ctx_on	ctx_off
+
+131:listen計算行數
+grep '16-JUN-2015 14:' listener_20150616_zbcrep.log|grep 'establish'|awk '{print $1,substr($2,1,5)}'|sort|uniq -c 
+grep '26-JUL-2015' listener.log |grep 'establish'|grep -i 'office'|awk '{print $1,substr($6,1,42)}'|sort|uniq -c
+grep '26-JUL-2015' listener.log |grep 'establish'|grep -i 'office'|awk '/(10.199.9.122)|(10.199.8.127)/ {print $0}' >/tmp/session.log
+計算多個文件的總大小
+ls *20150705* | xargs du -s | awk '{sum+=$1} END{print sum}'
+find ./ -type f -name "*20150705*"|xargs du -cb
+cat << eof >/tmp/init$ORACLE_SID.ora
+
+
+if [ 22 -eq 33 ]; then  echo "ok"; else echo "33"; fi
+[oracle@zz-tdpdf-db02 data]$ ans=8;case $ans in 9) echo "your number is $ans"; ;; 2) echo "your number is 2"; ;; [3-9]) echo "ypur number is $ans"; esac
+ypur number is 8
+num=20;while  [ $num -le 100 ];do echo "num=$num"; let num=num+1;done
+
+linux shell下常用输入输出操作符是
+1.  标准输入   (stdin) ：代码为 0 ，使用 < 或 << ； /dev/stdin ->     /proc/self/fd/0     0代表：/dev/stdin 
+2.  标准输出   (stdout)：代码为 1 ，使用 > 或 >> ； /dev/stdout ->    /proc/self/fd/1    1代表：/dev/stdout
+3.  标准错误输出(stderr)：代码为 2 ，使用 2> 或 2>> ； /dev/stderr -> /proc/self/fd/2 2代表：/dev/stderr
+ll hxtest.log hetest.log > h1.log 2>&1
+The file hxtest.log is exists and hetest.log not exists,> h1.log mean is printing result to h1.log. 2>&1 mean is bind stand err out(2) to stand result out(1).
+then h1.log file will contains result and error message.
+
+awk -F ',' '{if (index($NF,"無") ==0) {V_STR1=$0;getline;if(index($1,"2014")==0);print V_STR1""$0} else print $0}' 2.txt >9.txt
+awk -F ',' '{if (index($NF,"無") == 0 && index($1,"2015") != 0) {line=$0} else if ( index($NF,"無") != 0 && index($1,"2015") == 0) {print line $0} else print $0}' 2.txt >13.txt
+
+http://linuxtools-rst.readthedocs.org/zh_CN/latest/base/03_text_processing.html#awk
+http://man.linuxde.net/awk#条件判断语句
+http://webcache.googleusercontent.com/search?q=cache:KIsAHMwKUt4J:man.linuxde.net/sed+&cd=6&hl=zh-CN&ct=clnk&gl=cn
+
+
+132:ORA-00600: internal error code, arguments: [KGHLKREM1], [0x87C000020], [], [], [], [], [], [], [], [], [], [] 
+    ORA-00600: internal error code, arguments: [17069], [0x25CE1AE10], [], [], [], [], [], []  -------flush shared_pool
+    error code: KGHLKREM1. Please note the error code / function starting with KGH* are linked to memory. 
+    The issue occurred due to a temporary memory corruption. Memory corruptions are not critical and they do not lead to data corruption. 
+    They are solved at the first instance restart. In the vast majority of cases, these errors can be safely ignored. To proceed: 
+    please restart the database and recheck if error still persists. 
+    ACTION:
+	1.alter system flush shared_pool;
+	2.restart database
+	
+133:kfed修復損壞的ASM DISK HEADER以及恢復測試
+http://www.ludatou.com/?p=2162
+dd if=/dev/asm_test_1G_disk1  bs=4096  count=1 of=/dev/asm_test_1G_disk1  bs=4096 count=1  seek=510
+dd if=/dev/asm_test_1G_disk1  of=-  bs=4096 count=1 skip=510
+ibs=BYTES              read BYTES bytes at a time
+obs=BYTES              write BYTES bytes at a time
+seek=BLOCKS            skip BLOCKS obs-sized blocks at start of output
+skip=BLOCKS            skip BLOCKS ibs-sized blocks at start of input
+
+134:Archived log exists on archivelog directory but cant query from V$archived_log
+select * from  v$controlfile_record_section
+Doc ID: Note:180859.1 
+Subject: VIEW: "V$CONTROLFILE_RECORD_SECTION" Reference Note 
+Doc ID: Note:47322.1 
+Subject: Init.ora Parameter "CONTROL_FILE_RECORD_KEEP_TIME" Reference
+
+135:hs_message_to_agent.(the 'hs' suggests heterogeneous services)
+在v$session中查到等待事件为hs_message_to_agent. 这是个空闲等待事件。明显跟异构服务相关。在包中有使用DB_LINK通过透明网关访问SQL_SERVER。
+挨个测试这些LINK，发现有一个DB_LINK无法存取数据。咨询开发人员，该库已经停止。但是透明网关仍然挂这该服务。结果就造成编译会话在HS处挂起。
+在正式库的该包未使用这些LINK,结果OK.
+
+136:sequence skip value
+    root cause: 1.database restart 2.cached value in shared_pool page out
+	Action:1.change cache to nocache  2.Use dbms_shared_pool.keep('sequnce_name','Q') to keep sequece_name to shared_pool.
+137:rman:set nocfau
+    SET NOCFAU RMAN command is an abbreviation for the SET NO CONTROLFILE AUTOBACKUP RMAN command.
+	
+138:RMAN 命令行調用rman命令時 命令文件及logfile都必須使用絕對路徑
+    rman target / @'/Data/software/hx_soft/oracle/10205/hxtest/data/rman_test_cmd.sh' log '/tmp/2.log'
+	84345 87326
+139:ORA-12899: value too large for column(因字符集導致的錯誤,漢字1個占用（ZHS16GBK 2byte,AL32UTF8 3byte),如果含有漢字長度需要用LENGTHB查看長度)
+    select ID,LENGTH(NAMEC),LENGTHB(NAMEC),NAMEC from DMPDB2.STATION;
+	
+140:Partition table relation DDL statments
+    splitting table partition cause:(Note:Pay attention to choose the split time it will cause partition become unusable if data exists each new partition)
+	alter table F3602914.R_PDCA_PF split partition  DCS_P201505  AT (TO_DATE(' 2015-05-04 00:00:00', 'SYYYY-MM-DD HH24:MI:SS', 'NLS_CALENDAR=GREGORIAN')) 
+    INTO ( PARTITION DCS_P201505_04 tablespace D_RP10_RSFIS, PARTITION DCS_P201505 tablespace D_RP10_RSFIS);
+	 
+	 
+	 ALTER INDEX DMPDB2.IX_CR_N71_01_ID       INITRANS   200
+
+ALTER  INDEX DMPDB2.IX_CR_N71_01_ID   modify default attributes pctfree  20;
+
+	 
+	ALTER table F3602914.CR_N51_01 modify  PARTITION  DCS_P201205 INITRANS 10;
+    ALTER table F3602914.CR_N51_01 modify default attributes INITRANS 10;
+    ALTER TABLE F3602914.CR_N51_01 MOVE PARTITION DCS_P201501 TABLESPACE USERS;
+    ALTER INDEX F3602914.CR_N51_01_ID  REBUILD PARTITION DCS_P201501 TABLESPACE USERS;
+	alter table ZBCCSD2_CSD2.R_PDCA_FYD_N56 modify partition FYD_N56_P201306 deallocate unused keep 256k
+	alter   TABLE MCA_MLB_BOBCAT_TESTRESULT_PAR add partition  p_day1228 values ('2018-12-31') tablespace I_RP10WEB_DATA 
+	alter table ZBCMLB2_MLBII.A_PDCA_FY_N56 modify default attributes initrans 10  storage(INITIAL  64k)
+	CREATE TABLE MCA_MLB_BOBCAT_TESTRESULT_PAR
+    (
+      WIP_NO              VARCHAR2(20 BYTE),
+      TEST_TIME           VARCHAR2(50 BYTE),
+      TEST_HOUR           VARCHAR2(20 BYTE),
+      IS_TEST_FAIL        VARCHAR2(1 BYTE),
+      SYMPTOM_CODE        VARCHAR2(1024 BYTE),
+      SYMPTOM_CODE_FIRST  VARCHAR2(255 BYTE),
+      FACTORY             VARCHAR2(10 BYTE),
+      STATION             VARCHAR2(50 BYTE),
+      STATION_CODE        VARCHAR2(100 BYTE),
+      LINE                VARCHAR2(50 BYTE),
+      MACHINE             VARCHAR2(50 BYTE),
+      LINE_TYPE           VARCHAR2(50 BYTE),
+      TEST_TIMES          NUMBER,
+      RANDNO              NUMBER,
+      FAIL_COUNT          NUMBER,
+      TEST_RESULT         VARCHAR2(300 BYTE),
+      SYMPTOM             VARCHAR2(255 BYTE),
+      DAY                 VARCHAR2(10 BYTE),
+      MODEL               VARCHAR2(20 BYTE),
+      BI_INSERT_DATE      DATE
+    )
+    partition by list(DAY) (
+    partition p_day0 values ('2015-08-21') tablespace I_RP10WEB_DATA,
+    partition p_day1 values ('2015-08-22') tablespace I_RP10WEB_DATA,
+    partition p_day2 values ('2015-08-23') tablespace I_RP10WEB_DATa
+    )
+    tablespace I_RP10WEB_DATA
+	
+141:VW_JF_SET$(/*隐藏参数_optimizer_join_factorization决定了优化器是否可以选用join factorization,现在我们禁用它*/)
+    JF是join factorization的缩写，你可以把它翻译作链接因式分解，如果你学过离散数学或者数据库原理的话，
+    那么这种在11.2.0.1中最新推出的基于成本的变换操作对你来说并不陌生,公式的样式来表达大概是下面这样:
+    YYA,YYB和YYC是3个关联的数据对象亦或者是3个关联的结果集;
+    (YYA JOIN YYB) UNION [ALL] (YYA JOIN YYC)
+    可以转换成为:
+    YYA JOIN (YYB UNION [ALL] YYC)
+    opt_param
+It appears that the opt_param hint is very similar to the "alter session" method for changing parameters, but it only applies to that specific SQL statement
+sytanx:opt_param(<parameter_name> [,] <parameter_value>).
+example:opt_param('_optimizer_join_factorization','FALSE')
+
+143:OGG 觸發器導致在DROP 分區表或DROP 分區表的表分區時,產生latch:cache buffer chains/buffer busy waits
+    禁用GGS_DDL_TRIGGER_BEFORE觸發器即可。 
+	
+144:V$SESSION (lock account)
+PLSQL_ENTRY_OBJECT_ID	NUMBER	Object ID of the top-most PL/SQL subprogram on the stack; NULL if there is no PL/SQL subprogram on the stack
+PLSQL_ENTRY_SUBPROGRAM_ID	NUMBER	Subprogram ID of the top-most PL/SQL subprogram on the stack; NULL if there is no PL/SQL subprogram on the stack
+PLSQL_OBJECT_ID	NUMBER	Object ID of the currently executing PL/SQL subprogram; NULL if executing SQL
+PLSQL_SUBPROGRAM_ID	NUMBER	Subprogram ID of the currently executing PL/SQL object; NULL if executing SQL
+
+145:禁止大規模連接的方法
+    1.先KILL掉,觀察是否可以(kill的時候要聞訊用戶是否可以,w3wp.exe的程式為web頁面程式可以直接KILL)
+    2.如果不行,是否可以鎖用戶帳號
+	3.如果還不行,要求用戶禁止用戶端的service
+   
+146:WEB報表行轉列語句改寫
+SELECT COLUMN_VALUE AS ALIAS_FLOOR FROM THE (SELECT CAST(STRVARLIST(NVL(:B7 , '1')) AS VARTABLETYPE) FROM DUAL)
+改寫為： REGEXP_INSTR(','||:B7||',',PROPERTY_04||',',1,1,0,'i')>1 --The first comma and >1 are used to expect property_04 null value 
+
+147:/etc/services sqlnet.ora
+
+netstat -ntap | grep 1521
+
+
+148:DYNAMIC LISTENER
+    The dynamic listener will display "The listener supports no services" when the host has multi-ip-address.
+	This because the dynamic registeration will only register services to Local_host(Usually we choose VIP to register for listen for HA)
+	In this statuation we can update /etc/hosts to archive dynamic service to VIP.
+	Modify /etc/hosts as below:
+	10.195.229.107 ZZDR-F-SFC-MLB01
+    10.195.229.108 ZZDR-F-SFC-MLB02
+    10.195.229.101 ZZDR-F-SFC-MLB01
+    10.195.229.101 ZZDR-F-SFC-MLB-VIP
+	
+DECLARE
+V_STR VARCHAR2(2000);
+V_PARTITION  VARCHAR2(2000);
+V_ID NUMBER;
+BEGIN
+SELECT 'PARTITION(DCS_P'||TO_CHAR(SYSDATE,'YYYYMM')||')' INTO V_PARTITION FROM DUAL;
+V_STR:='SELECT /*+index (R_PDCA_FYD_N71 IX_FYD_N71_WIP_NO)*/ NVL(MAX(ID), -777) FROM ZBCDMP2_DMPDB2.R_PDCA_FYD_N71 '||V_PARTITION||'  WHERE WIP_NO = :1 AND TEST_STATION_CODE = :2 AND CATEGORY_KEY = :3 AND DEL_FLAG = 0';
+EXECUTE IMMEDIATE V_STR  into V_ID USING 'FP85383007RG8G4AB','ALS-DIFF', 'N71_Helium';
+DBMS_OUTPUT.PUT_LINE(V_ID);
+END;
+/
+
+149:手動增大SWAP分區
+注:通過cat /proc/swaps命令可以得到系統swap對應的分區路徑
+[root@wangkeyuan ~]# mkdir /usr/swap
+[root@wangkeyuan ~]# dd if=/dev/zero of=/usr/swap/swapfile01   bs=1k count=16777216 #创建一个10m的文件
+[root@wangkeyuan ~]# mkswap /usr/swap/swapfile01 #将创建的文件用作交换分区
+                     mkswap: /usr/swap/swapfile01: warning: don't erase bootbits sectors
+[root@wangkeyuan ~]# swapon /usr/swap/swapfile01 #开启这个交换空间
+4) 在每次开机的时候自动加载swap文件, 需要在 /etc/fstab 文件中增加一行
+/usr/swap/swapfile01 swap swap defaults 0 0
+5) 查看swap
+cat /proc/swaps 
+
+150:釋放SWAP
+sysctl -w vm.min_free_kbytes=4096000
+sysctl -w vm.vfs_cache_pressure=200
+sysctl -w vm.swappiness=40   （老版本的linux是设置vm.pagecache参数)
+
+
+151:MTTR(Mean Time To Recover Advisor)
+Is enabled when two parameters are set to certain values:STATISTICS_LEVEL,FAST_START_MTTR_TARGET( range between 0 and 3600 seconds Any setting above 3600 defaults back to 3600)
+conflict with three parameters:FAST_START_IO_TARGET,LOG_CHECKPOINT_INTERVAL,LOG_CHECKPOINT_TIMEOUT
+SELECT    TARGET_MTTR,    ESTIMATED_MTTR FROM    V$INSTANCE_RECOVERY;
+
+
+153:Baselines
+A baseline contains performance data from a specific time period that is preserved for comparison with other similar workload periods when performance problems occur.
+The snapshots contained in a baseline are excluded from the automatic AWR purging process and are retained indefinitely.
+DBA_HIST_SNAPSHOT
+BEGIN
+    DBMS_WORKLOAD_REPOSITORY.CREATE_BASELINE (start_snap_id => 270, 
+                   end_snap_id => 280, baseline_name => 'peak baseline', 
+                   dbid => 3310949047, expiration => 30);
+END;
+/
+THe optional expiration parameter is set to 30, so the baseline will expire and be dropped automatically after 30 days. 
+If you do not specify a value for expiration, the baseline will never expire.
+
+BEGIN
+  DBMS_WORKLOAD_REPOSITORY.DROP_BASELINE (baseline_name => 'peak baseline',
+                  cascade => FALSE, dbid => 3310949047);
+END;
+/
+
+BEGIN
+    DBMS_WORKLOAD_REPOSITORY.RENAME_BASELINE (
+                   old_baseline_name => 'peak baseline', 
+                   new_baseline_name => 'peak mondays', 
+                   dbid => 3310949047);
+END;
+/
+
+154:Bug 12410357  ORA-600 [kdifind:kcbget_24] / [kcbget_24] - superseded
+ Set "_db_file_noncontig_mblock_read_count"=0
+ 
+155:san switch關機命令
+    sysshutdown
+	
+156:Formating time display type in sqlplus:
+ alter session set nls_date_format="YYYYMMDD:HH24:MI:SS";
+157:Using oracle profile to control resource
+    1.Must set parameter resource_limit=true 
+	2.alter the profile value to what you wanted(alter profile default limit sessions_per_user 700)
+158:ogg觸發器導致impdp緩慢
+    disable GGS_DDL_TRIGGER_BEFORE 或者
+    cd $OGGATE
+	sqlplus / as sysdba
+	@ddl_disable.sql
+159:釋放系統內存
+  sync
+  echo 1 > /proc/sys/vm/drop_caches0：不释放（系统默认值）
+  1：释放页缓存
+  2：释放dentries和inodes
+  3：释放所有缓存
+160:how to find objects have extents at the end of the datafile.
+  select * from (
+  select owner, segment_name, segment_type, block_id,row_number() over(partition by  owner, segment_name, segment_type order by block_id desc )  vt from dba_extents  where file_id=89 )
+  where vt=1
+161:linux誤刪文件恢復方法
+    lsof |grep -i delete 
+	example:
+	zabbix_ag 26283    zabbix    1w      REG              104,5   2097230     753751 /tmp/zabbix_agentd.log.old (deleted)
+	note:cp /proc/26283(The second column of previous line,)/1(The fourth column of previous line except keyword w,) /tmp/zabbix_agentd.log.old
+	cp /proc/26283/1 /tmp/zabbix_agentd.log.old
+162:Remove virbr0 interface in Linux
+    1.Verify if libvirtd is running
+    service libvirtd status
+    2.Verify if there is any host running. In my case there isn’t
+     virsh list
+    3.This is the default network set-up for the virtual machines
+     virsh net-list
+    4.To remove first I’ll make sure the service libvirtd won’t be started automatically on next boot
+    chkconfig –list | grep -i lib
+    chkconfig libvirt-guests off
+    chkconfig libvirtd off
+    5.Destroy the network default
+    virsh net-destroy default
+    6.And undefine the network default
+    virsh net-undefine default
+    7.Stop the libvirtd service
+    service libvirtd stop
+163:How to trace IP through command in linux and windows
+    window:
+    tracert 10.195.227.61
+    linux:traceroute 10.195.227.61
+164:Sysaux tablespace full cause ash&awr can't generate any data.
+    --http://www.dba-oracle.com/t_sysaux_tablespace_growth.htm
+    The sysaux tablespace stores all of the AWR report information, snapshots that are taken and stored within the sysaux tableapace.
+    1.-- Display retention period:
+      select dbms_stats.get_stats_history_retention from dual;
+    2.-- Set retention period to 90(smaller than previous got) days 
+    exec dbms_stats.alter_stats_history_retention(90);
+    3.-- Manually purge after x days and before
+         exec dbms_stats_purge_stats(SYSDATE-30);
+
+165:Changing the primary directory of linux user(~)
+    1.Got the current primary directory
+      more /etc/passwd |grep -i oracle
+    2.Switch to root user to change primary directory using following command
+      usermod -d /home/oracle oracle
+166:index compression
+http://allthingsoracle.com/compression-in-oracle-part-4-basic-index-compression/
+167:Automatical extend table partition in oracle 11G
+据年: INTERVAL(NUMTOYMINTERVAL(1,'YEAR'))
+根据月: INTERVAL(NUMTOYMINTERVAL(1,'MONTH'))
+根据天: INTERVAL(NUMTODSINTERVAL(1,'DAY'))
+根据时分秒: NUMTODSINTERVAL( n, { 'DAY'|'HOUR'|'MINUTE'|'SECOND'})
+下面用按月自动扩展来做个试验：
+create table t_range (id number not null PRIMARY KEY, test_date date)
+compress for oltp
+nologging
+partition by range (test_date) interval (numtoyMinterval (1,'MONTH'))
+(
+partition p_2014_01_01 values less than (to_date('2014-01-01', 'yyyy-mm-dd'))
+);
+168:trace impdp/expdp
+TRACE=480300
+This results in two trace files in BACKGROUND_DUMP_DEST:  
+--    Master Process trace file: <SID>_dm<number>_<process_id>.trc   
+--    Worker Process trace file: <SID>_dw<number>_<process_id>.trc   
+169:expdp is very slowly --doc 2000646.1
+SQL> connect / as sysdba
+SQL> exec dbms_stats.gather_dictionary_stats;
+SQL> exec dbms_stats.lock_table_stats (null,'X$KCCLH');
+SQL> exec dbms_stats.gather_fixed_objects_stats;
+SQL> BEGIN DBMS_STATS.GATHER_DATABASE_STATS (gather_sys=>TRUE); END;
+170:San Switch的級聯和堆疊
+1.堆叠是背板之间的连接，把几台交换机做成一个整体。
+2.级联是端口的连接。 级联是共享，堆叠是独享。
+170:查看網卡流量
+1.iptraf -g  
+2.sar –n DEV 1 100
+171:壞快檢測腳本
+    1.在DR運行如下語句生成腳本(&1用hx1代替）
+       SELECT  replace('dbv file='||file_name||' blocksize=8192 >>'||'dbv_result.log 2>hx1;','hx','&') FROM DBA_DATA_FILES
+    2.在linux主機端運行
+172:Using the DBA of dbv result to get relative datafile,datablock and object. 
+    select dbms_utility.data_block_address_block(&dba) block_id,dbms_utility.data_block_address_file(&dba) file_id from dual;
+    select owner,segment_name,segment_type from dba_extents where file_id=&file_id and &BLOCK_ID between block_id and block_id + blocks - 1;
+    select tablespace_name,owner, table_name, column_name, data_type from dba_lobs join dba_tab_columns using (owner, table_name, column_name) 
+    where segment_name ='&segment_name' and owner='&table_owner';
+173.ORA-01111: name for data file 5 is unknown - rename to correct file
+alter database create datafile  '/opt/oracle/product/10.2.0/dbs/UNNAMED00005' as '/opt/oracle/oradata/mmstest/test01.dbf';
+174:RECOVER STANDBY DATAFILE FROM PRIMARY  ---http://oracleinaction.com/recover-standby-datafile-primary/
+ 1.Ordinary method to restore physcial standby datafile 
+    1.primary db 
+      rman target /
+      backup datafile 5 format "/Data/hexin/db" ----replace datafile 5 with right datafile which contain nolgging cause corrupt blocks
+    2.standby db02
+      1.shutdown immedaite --------shutdown standby db
+      2.mv tbs01.dbf tbs01.dbfbak -------delete datafile with corrupt blocks
+      3.copy previous the backup file to standby db
+      4.rman target /
+      5.RMAN> catalog start with '/Data/hexin/db2/data_file_5_06r0faec_1_1';
+      6.RMAN> restore datafile 5;
+      7.RMAN> recover database; ----if report errors in this step switch logfile on primary db
+      8.RMAN> alter database open   
+      SQL> alter database recover managed standby database cancel;
+      Database altered.
+      SQL> alter database datafile 5 offline drop;
+      RMAN> catalog start with '/Data/hexin/db2/data_file_5_07r0fc2c_1_1';  
+      RMAN> restore datafile 5;
+      SQL> alter database recover managed standby database disconnect from session;
+   
+ 2.Using RMAN, connect to primary as target and standby as auxiliary
+    1.shutdown physical standby database 
+	2.delete needing recover datafile 
+	3.startup database at mount status
+	---Below is on primary db
+    4.[oracle@node1 ~]$ rman target / auxiliary sys/oracle@dg02
+	5.RMAN> backup as copy tablespace example auxiliary format '/u01/app/oracle/oradata/dg02/example01.dbf';
+	  RMAN> backup as copy datafile '/u01/app/oracle/oradata/dg02/example01.dbf' auxiliary format '/u01/app/oracle/oradata/dg02/example01.dbf';
+	6.check that image copy copy has been created on standby
+	  SBY>ho ls /u01/app/oracle/oradata/dg02/example01.dbf
+	7.Recover standby database and open it
+	  SBY>recover managed standby database disconnect;
+	  SBY>recover managed standby database using current logfile disconnect from session;
+175:DP log location.
+Windows systems: Data_Protector_program_data\log\AppServer
+UNIX systems: /var/opt/omni/log/AppServer
+176:Useradd command have no response when ldap was configured.
+    Through /var/log/message to find reporting ldap error.So no response is caused by ldap service.
+    Using following command to disable LDAP	
+    authconfig --disableldapauth --disableldap --enableshadow --updateall
+178.Getting ilo ip command on linux GUI
+hponcfg -w /tmp/ilo.txt
+179:delete applied archived log in standby database.
+PRE="set pagesize 0 \n set feedback off \n"; 
+SS="$ORACLE_HOME/bin/sqlplus -L -S / as sysdba"
+ROLE=$(echo -e "$PRE select database_role from v\$database;" | $SS)
+[[ "$ROLE" != "PHYSICAL STANDBY" ]] && { echo "ERROR: database not a physical standby"; exit 1; }
+THREADS=$(echo -e "$PRE select distinct thread# from v\$archived_log;" | $SS)
+for THREAD in $THREADS; do
+  MAX_APPLIED=$(echo -e "$PRE select max(sequence#) from v\$archived_log where applied='YES' and thread#=$THREAD;" | $SS)
+  echo "delete noprompt archivelog until sequence $MAX_APPLIED thread $THREAD;"|rman target /
+done
+180:ORACLE 11G RAC DRM
+    How to disable DRM in oracle 11g
+    1.Needing restart db
+      _gc_affinity_time=0
+      _gc_undo_affinity=FALSE ----this parameter is static 
+	  alter system set “_lm_drm_disable=7”  scope=both  sid=’*’;
+    2.Don't need to restart db
+      _gc_affinity_limit=1000000
+      _gc_affinity_minimum=1000000
+      alter system set "_gc_affinity_time"=0 scope=spfile;
+	  alter system set “_lm_drm_disable=7”  scope=both  sid=’*’;
+	  http://www.artoftuning.net/drm/  http://www.qiuyb.com/archives/110
+	  Disable DRM by setting:
+      _gc_policy_time=0
+      _gc_undo_affinity=false <= suggesting it is still needed in 11g to disable DRM?
+	  alter system set “_lm_drm_disable=7”  scope=both  sid=’*’;
+181:Notice when import data in oracle rac db 
+    1.Adding cluster=no to impdp commmand be sure impdp only running current instance
+	2.Adding access_method=direct_path to reduce undo usage 
+182：Find special day's log from alter log.
+    awk '/Sat Apr 02/ {f=NR} f && NR=f++1' alert_zzdmp22.log |more  /oracle/diag/rdbms/histdb/histdb/trace/alert_histdb.log
+	v_date=`date +"%a %b %d"`|awk "/$v_date/ {f=NR} f && NR=f++1" alert_zzdmp22.log |more
+	v_date=`date --date="-1 day"  +"%a %b %d"`|awk "/$v_date/ {f=NR} f && NR=f++1" alert_zzdmp22.log |more
+	
+	v_date=`date --date="-1 day"  +"%a %b %d"`
+	awk "/$v_date/ {f=NR} f && NR=f++1" alert_zzdmp22.log |more
+	
+	
+	#source ~/.bash_profile
+    #for r in /tmp/1.log
+    #do
+    #  if [[ $r =~ "df" ]];then
+    #     echo "--------------------Directory information-----------------------"
+    #     sh $r;
+    #   else 
+    #     echo "---------------------hx-test------------------------------------"
+    #     sh $r
+    #  fi
+    #  echo $r
+    #done
+    
+    #while read line
+    #do
+    #$line
+    #done
+    
+    ---Read each line in special file then 
+    #cat /tmp/1.log|while read line
+    #do
+    #echo "-----------sdfsfs-----------------"
+    #$line
+    #done
+    
+        
+    old=$IFS
+    IFS='
+    '
+    for r in  `cat /tmp/1.log`
+    do
+    (
+    echo "------------------------hx-test------------------------"
+    IFS="$old"
+    $r
+    )
+    done 
+183:Using hpasmcli to check ASR status:
+     http://www.lazysystemadmin.com/2011/05/hpasmcli-overview-and-commands.html
+184:How to let User A to view source code of procedure or function which owner is B
+    1.grant execute on procedure/function to user A.
+	2.grant select any dictionary to user A or grant select on dba_source  to user a.
+	
+185:Listing all lines that one column are same but another is differnt
+   select * from (
+   select SERIALNO,UD_ID,count(1) over(partition by ud_id) v_b from (
+   select  SERIALNO,UD_ID,row_number() over(partition by serialno,ud_id order by serialno) v_a from (
+   SELECT SERIALNO,UD_ID,count(1) OVER(PARTITION BY UD_ID) V_NUMBER
+   FROM DMPEDI.HEADER_140Z WHERE SFCTOEDITIME BETWEEN TO_DATE('201408300000','YYYYMMDDHH24MI') AND TO_DATE('201409010000','YYYYMMDDHH24MI') and ud_id is not  null )
+   where V_NUMBER>1) where v_a=1) where v_b>1	
+186:Using cat to create file and input contents and exit with eof symbol
+  root@ribbonchen-laptop:~# cat>out.txt<<EOF
+  > ha
+  > haha
+  > hahaha
+  > EOF
+  root@ribbonchen-laptop:~# cat out.txt
+  ha
+  haha
+  hahaha
+187:11G ASM磁盘组不能自动MOUNT处理
+查看参数disk_groups发现没有值，按理来说应该是这三个磁盘组。
+SQL> show parameter disk
+NAME                                 TYPE        VALUE
+------------------------------------ ----------- ------------------------------
+asm_diskgroups                       string
+asm_diskstring                       string
+提示只能在memory中进行修改,尝试修改
+SQL> alter system set asm_diskgroups=sys_dg,data_dg,dg_fra scope=memory;
+System altered.
+是可以修改，但是没办法永久保存，要修改的是spfile中的disk_groups参数，让ASM实例每次启动都能加载所有的diskgroup。
+那问题就是如何修改spfile中的asm_diskgroups参数
+通过create pfile 然后修改pfile，再通过pfile创建spfile,重启实例即可
+188:linux crontab job can't execute as normal(Note file privilege and owner)
+  Changing /var/spool/cron/oracle privileges  cause this error.
+  We can get BAD FILE MODE from /var/log/cron
+  workaround.
+  1.delete /var/spool/cron/oracle file and using crontab -e to recreate file
+  2.Using chmod 0644 /var/log/cron/oracle to right privilege
+189:Using oracle built-in function to translate long type to date type(Get table partitions high value as date type)
+   select * from (
+      WITH xml AS (
+               SELECT XMLTYPE(
+                         DBMS_XMLGEN.GETXML('SELECT * FROM DBA_TAB_PARTITIONS where table_OWNER=''F3603043''')
+                         ) AS xml
+               FROM   dual
+               )
+               ,parsed_xml AS (         
+               SELECT     extractValue(xs.object_value, '/ROW/TABLE_OWNER')       AS table_OWNER
+               ,      extractValue(xs.object_value, '/ROW/TABLE_NAME')       AS table_name
+               ,      extractValue(xs.object_value, '/ROW/PARTITION_NAME')      AS PARTITION_NAME
+               ,      extractValue(xs.object_value, '/ROW/HIGH_VALUE')  AS HIGH_VALUE
+               FROM   xml x
+               ,      TABLE(XMLSEQUENCE(EXTRACT(x.xml, '/ROWSET/ROW'))) xs
+               )
+       SELECT to_date(substr(HIGH_VALUE,11,19),'yyyy/mm/dd hh24:mi:ss') v_date,HIGH_VALUE
+       FROM   parsed_xml WHERE TABLE_OWNER='F3603043')
+       where v_date >sysdate-365
+190:crontab----let other use to edit oracle user crontab job
+    You can configure sudo to enable or disable any command. 
+    Here is an example, where the users bob, fred and anna need to edit the oracle user's crontab: 
+    1. Add a new group to /etc/groups : 
+    groupadd oracron 
+    2. Add the users to the new group: 
+    gpasswd -a bob oracron 
+    gpasswd -a fred oracron 
+    gpasswd -a anna oracron 
+    3. Add this line to /etc/sudoers, using the "visudo" command: 
+    %oracron ALL = (oracle) /usr/bin/crontab -e
+    4. Test it (logged in as bob): 
+    sudo -u oracle crontab -e 
+191:
+alter database backup controlfile to trace;
+oradebug setmypid
+oradebug SETTRACEFILEID 555;
+oradebug tracefile_name
+alter session set events 'immediate trace name controlf level 12';
+alter system set events 'immediate trace name file_hdrs level 1'; -----控制文件中关于datafile 的记录条目
+alter system set events 'immediate trace name file_hdrs level 2'; -----包含level1 以及generic header
+alter system set events 'immediate trace name file_hdrs level 3;  ---包含level2以及header information in the datafile
+
+alter session set events 'immediate trace name PROCESSSTATE level 10' 
+
+192:keep objects
+    alter table/index table_name/index_name storage(buffer_pool keep)        ----keep object to buffer pool
+	select segment_name from dba_segments where BUFFER_POOL = 'KEEP';        ----check object be keepped or not
+	alter table/index  table_name/index_name storage(buffer_pool default);   ----unkeep object
+	
+193:Report ORA-00376&ORA-01110 when login database after The p2000 storage crash 
+ORA-00376: file 34 cannot be read at this time	
+ORA-01110: data file 34: '/oradata04/znedi/UNDOTBS03.DBF'
+Reason:
+   The datafile status is recover because storage crash.
+Action:
+   recover datafile and online 
+   recover datafile 34;
+   alter database datafile 34 online;
+   batch recover datafile method:
+   select 'recover datafile '||FILE#||';' from V$datafile where status not in ('SYSTEM','ONLINE');
+   select 'alter database  datafile '||FILE#||' online;' from V$datafile where status not in ('SYSTEM','ONLINE');
+   
+   vi /tmp/recover_online_file.sh
+   #!/bin/bash
+   source ~/.bash_profile
+   rm -rf /tmp/1.txt
+   sqlplus -S '/ as sysdba' <<eof
+   set feedback off
+   set wrap off
+   set head  off
+   set serverout off
+   set verify off
+   set pages 0
+   set termout off
+   spool /tmp/1.txt
+   select 'recover datafile '||FILE#||';' from V\$datafile where status not in ('SYSTEM','ONLINE');
+   select 'alter database  datafile '||FILE#||' online;' from V\$datafile where status not in ('SYSTEM','ONLINE');
+   spool off
+   exit
+   eof
+194:Snapshot Standby DATABASE vs Flashback Database
+    Snapshot Standby数据库功能，此项功能可将备库置身于“可读写状态”用于不方便在生产环境主库中测试的内容，比如模拟上线测试等任务.
+       只需要执行一条非常简单的SQL命令便可以将备库调整到Snapshot Standby数据库。
+       alter database convert to snapshot standby;
+       一条命令恢复原物理备库身份
+       alter database convert to physical standby;
+    Flashback Database闪回数据库功能极大的降低了由于用户错误导致的数据丢失的恢复成本.
+    How to config Flashback database.
+       Change three parameters:db_recovery_file_dest,db_recovery_file_dest_size,db_flashback_retention_target,force_logging.
+       The default flashback time is 1440 minutes(one day)
+       startup database to mount status using command "alter database flashback on" to start flashback database feature.
+       alter database open.
+    How to using flashback database feature.
+       Check the maximum early time the database can flashback to.
+       select * from V$flashback_database_log
+       then shutdown database and startup mount with exclusive status.
+       Using command "Flashback database to timestamp(to_date('2016-06-06 10:00:00','yyyy-mm-dd hh24:mi:ss'))/scn" to flashback to specific timestamp.
+       Then you have to two ways using been flashback database.
+       1.alter database open read only 
+         Using this command to open database and export your want data,and shutdown databse,then startup database to mount status,recover database to the timestamp before flashback.
+       2.alter database open resetlogs.
+         Using this command to open database to a specific timestamp and loss all data after that timestamp.
+195:ORACLE 11G direct path read.
+    In Tradition oracle read data block into data buffer cache when the data is not in buffer cache.In oracle 11G oracle introduce direct path read to aviod full scan big table and effect
+	buffer cache and the contention in buffer cache latch.
+	The factor effect direct path read:
+	1._small_table_threshold
+	2.脏块的比例
+	3.表中数据被cache的比例
+    
+196:log file sync is very high in 11.2.0.3 and later.(Adaptive Log File Sync Optimization (Doc ID 1541136.1))
+    A new method called redo log poll invoke in this version and later.sometimes this method will cause log file sync is very high.
+	We can use :ALTER SYSTEM SET "_use_adaptive_log_file_sync"= false to disable this method and use the old method called post/wait
+197:vxvm trace link status
+   vxstat -o alldgs -i 2 -c 10 -----check all dgs io status
+   vxtrace -g vxdg_name  ----check link status
+198: Hanganalyze &systemstate
+Hanganalyze provides information on all processes involved in the hang chain,Hanganalyze is a summary and will confirm if the db is really hung or just slow and provides a consistent snapshot.
+systemstate provides information on all processes in the database.Systemstate dump shows what each process on the database is doing
+
+199:revoke dba role cause unlimit tablesapce revoke cascade.
+    revoke dba role from user,will cascade revoke sys privs.
+200:Interprent ---dump datafile block 2-128 
+    block 1:
+    Get file size from dump datafile block 2 in oracle 11G
+    RelFno: 188, Unit: 8, Size: 131072, Flag: 1
+    RelFno---relative file number   unit=8=8k  Size:block number select Size*Unit/1024/1024 from dual---get file GB size
+	block 2:
+	frmt: 0x02 chkval: 0x602e type: 0x1e=KTFB Bitmapped File Space Bitmap---->bitmap space
+	RelFno: 188, BeginBlock: 128, Flag: 0, First: 1, Free: 63471  --First: 1 means then first free unit number is 1(the start number is 0)
+    0100FFFF00000000 0000000000000000 0000000000000000 0000000000000000
+	--Each postion present four units and each unit contains four blocks which size is 8K.
+	--Because the OS is linux and is little.then the byte present is first four bits at the end and second four bits at the begin.so(01 repsent is 0000 0001 in dump but 0001 0000 is true in OS)
+201:Get file name and block number from rdba
+rdba:0x0aedfe32
+select to_number('0aedfe32','xxxxxxxxxxxxx') from dual   --36373325
+select dbms_utility.data_block_address_file(36373325) "file",         dbms_utility.data_block_address_block(36373325) "block"    from dual;
+202:ORA-32000 not able to modify the rdbms spfile which is there in ASM
+    The tranditional databas file parameter file order  is spfileSID.ora,spfile.ora,initSID.ora,init.ora,It will report error when can't find parameter file.
+    In RAC environment this is not,we can use below command get first looking parameter file position.
+	srvctl config database -d zzdw2 -a
+	Modify spfile  seach order:
+	srvctl modify database -d zzdw2 -p ' +DATA/RACDB/spfileRACDB1.ora'
+
+203:Report ORA-12545: Connect failed because target host or object does not exist. error in RAC Environment
+    Using A level 16 sqlnet client trace would reveal something similar to the following:
+	Adding below two parameters into sqlnet.ora to enable Level 16 sqlnet client trace.
+	trace_level_client = 16
+    trace_directory_client = D:\oracle
+	Reason:When attempting to connect to a RAC service name, the connection intermittently fails with an ORA-12545 error:  TNS: Host or object doesn't exist.   
+	       The expected behavior is that the connection would be redirected to any of the listener in the cluster where the listener is running on the VIP.  
+		   This is normal under RAC Cluster node load balancing.However, when the server side listener endpoints are not correctly configured OR the client cannot resolve all forms of the VIP hostname, this error can get thrown.
+    Solution:Log in with privileges to the instance and issue the following commands so that LOCAL_LISTENER is set correctly:
+	       alter system set LOCAL_LISTENER="(address=(protocol=tcp)(port=1521)(host=<your_vip_node1>))" scope=both sid='INSTANCE_NAME1';
+           Do the same for the 2nd instance where host is set to the <vip_host_node2> and the sid is set to the 2nd instance name.
+           alter system set LOCAL_LISTENER="(address=(protocol=tcp)(port=1521)(host=<your_vip_node2>))" scope=both sid='INSTANCE_NAME2'; 
+204:
+   utl_raw.cast_to_raw   
+205:Disk file operations I/O，官方解释如下：
+This event is used to wait for disk file operations (for example, open, close, seek, and resize). It is also used for miscellaneous I/O operations such as block dumps and password file accesses.
+Wait Time: The wait time is the actual time it takes to do the I/O
+fileno:File identification number
+filetype:Type of file (for example, log file, data file, and so on)
+206:隱式轉換導致sql無法使用索引.
+    Table column poperty is varchar2 but the X input nvarchar2 cause index can't be used.
+    We can use see keyword SYS_OP_C2C from em or SELECT FILTER_PREDICATES FROM v$SQL_PLAN WHERE SQL_ID='0ns9f48vjsnqx'.
+	先搜到了MOS有篇文章SYS_OP_C2C Causing Full Table/Index Scans (文档 ID 732666.1)，简明扼要地说明了这个问题：
+    1) You are executing a query using bind variables.
+    2) The binding occurs via an application (eg. .NET, J2EE ) using a "string" variable to bind.
+    3) The query is incorrectly performing a full table/index scan instead of an unique/range index scan.  
+    4) When looking at advanced explain plan, sqltxplain or 10053 trace, you notice that the "Predicate Information" shows is doing a "filter(SYS_OP_C2C)".
+    SYS_OP_C2C is the implicit function which is used to convert the column between nchar and char.
+207：resmgr:cpu quantum cause cpu usage is very high.
+In oracle 11G we can through below way to resolve it 
+1. Set the current resource manager plan to null (or another plan that is not restrictive): 
+alter system set resource_manager_plan='' scope=both; 
+2. Change the active windows to use the null resource manager plan (or other nonrestrictive plan) using: 
+execute dbms_scheduler.set_attribute('WEEKNIGHT_WINDOW','RESOURCE_PLAN',''); 
+execute dbms_scheduler.set_attribute('WEEKEND_WINDOW','RESOURCE_PLAN',''); 
+3. Then, for each window_name (WINDOW_NAME from DBA_SCHEDULER_WINDOWS), run: 
+execute dbms_scheduler.set_attribute('<window name>','RESOURCE_PLAN',''); 
+SQL> select WINDOW_NAME  from DBA_SCHEDULER_WINDOWS; 
+WINDOW_NAME
+------------------------------
+MONDAY_WINDOW
+TUESDAY_WINDOW
+WEDNESDAY_WINDOW
+THURSDAY_WINDOW
+FRIDAY_WINDOW
+SATURDAY_WINDOW
+SUNDAY_WINDOW
+WEEKNIGHT_WINDOW
+WEEKEND_WINDOW
+ 
+208:修改VCS各個服務超時時間
+haconf -makerw
+hagrp -modify dr-l-fatpgroup PreonlineTimeout 7600
+hatype -modify Oracle OnlineTimeout 8000
+haconf -dump -makero
+209:ORA$AT_SQ_SQL_SW_640(自动维护作业 AUTO TASK 管理 )
+SELECT * FROM DBA_AUTOTASK_JOB_HISTORY
+
+select client_name,status,WINDOW_GROUP from dba_autotask_client; 
+ 
+select client_name, status,attributes,service_name from dba_autotask_client
+/
+ 
+BEGIN
+  DBMS_AUTO_TASK_ADMIN.disable(
+    client_name => 'auto space advisor',
+    operation   => NULL,
+    window_name => NULL);
+END;
+/
+ 
+BEGIN
+  DBMS_AUTO_TASK_ADMIN.disable(
+    client_name => 'sql tuning advisor',
+    operation   => NULL,
+    window_name => NULL);
+END;
+/
+ 
+BEGIN
+  DBMS_AUTO_TASK_ADMIN.disable(
+    client_name => 'auto optimizer stats collection',
+    operation   => NULL,
+    window_name => NULL);
+END;
+/
+ 
+select client_name, status,attributes,service_name from dba_autotask_client
+/
+Select * from DBA_AUTOTASK_WINDOW_CLIENTS;
+ 
+209:UX:vxfs umount.vxfs: ERROR: V-3-26388: file system /oradata02 has been mount locked
+fuser -km /archlog
+/opt/VRTS/bin/vxumount -o mntunlock=VCS /oradata02
+fsck -t vxfs -y /dev/vx/rdsk/dg_data02/vol_dg_data02
+mount -t vxfs /dev/vx/dsk/dg_data02/vol_dg_data02 /oradata02
+210: OGG-00446  Oracle GoldenGate Capture for Oracle, extdata.prm:  No valid log files for current redo sequence 8, thread 1, error retrieving redo file name for sequence 8, archived = 0, use_alternate = 0Not able to establish initial position for begin time 2016-03-30 11:30:22.000000.
+造成该错误的原因是因为RAC的共享存储采用了ASM（自动存储管理），而OGG的抽取进程无法连接到ASM，故而无法抓取到redo log
+extract extdata
+dynamicresolution
+userid oggadmin,password oracle
+TRANLOGOPTIONS ASMUSER sys@tns_name,ASMPASSWORD oracle  -----tns_name locate to +ASM in tnsname.ora
+exttrail ./dirdat/et
+table scott.dept;
+211:
+select * from V$segment_statistics  where statistic_name like '%row lock waits%'
+
+select * from V$segment_statistics  where statistic_name like '%ITL waits%'
+
+212:
+There are four areas of wait class waits in a RAC database, contention, message, load and block wait tuning:
+Contention wait event tuning in RAC:  This is tuning for contention.  The gc current block busy and gc cr block busy events indicate that the remote instance received the block 
+after a remote instance processing delay, in many cases due to a log flush. High concurrency is evidenced by the gc buffer busy event which indicates that the block was pinned or 
+held up by a session on a remote instance. It can also indicate that a session on the same instance has already requested the block. 
+gc current block busy gc cr block busy gc buffer busy
+Message wait tuning in RAC:  This Indicates that no block was received from being cached in any instance. Instead a global grant was given enabling the instance to read the block from disk. 
+If this time is long, it may be that the frequently used SQL causes a lot of disk I/O (for the cr grant) or that the workload inserts a lot of data and needs to format new blocks 
+(for the current grant).
+gc current grant 2-way gc cr grant 2-way
+Load wait event tuning in RAC:  Load wait events indicate a slowdown in the global caching services (GCS) layer.  Cache fusion interconnect, load issues, 
+or SQL execution against a large working set is frequently the root cause of the below wait events.
+gc current block congested  gc cr block congested:
+Block wait tuning in RAC:  This includes block waits for two-way and three-way wait events. These waits also indicate that the remotely cached blocks were shipped without having been busy, 
+pinned, or requiring a log flush operation.
+gc current block 3-way gc cr block 2-way gc cr block 3-way
+213:ORA-01591: lock held by in-doubt distributed transaction 108.28.46269    
+http://cache.baiducontent.com/c?m=9d78d513d99e01fc4fece4690d60c0676956836437d4c4523f8a9c12d52219564615fea6777c4d51c4c50b3640f9154bea876a25711e71f6dc99c21b8ca6c16869d3766a2701d016548042f18a5b22c420955dedad&p=9a60c64ad4934eac58ebc63f1359cf&newp=827fc54ad5c347fe07a2d02d021491231610db2151d4db1e6b82c825d7331b001c3bbfb42323110ed6c17b640ba4485ceffa3c70340821a3dda5c91d9fb4c57479d9787b34&user=baidu&fm=sc&query=ORA-01591&qid=f22202e30007873c&p1=6
+ROLLBACK FORCE '73.11.124822';
+commit force '73.11.124822';
+exec dbms_transaction.purge_lost_db_entry('108.28.46269');
+使用这个命令，这个事务被成功的强制提交了。下面来处理108回滚段的那个事务。由于这个事务在pending_trans$中缺少记录，所以首先
+将这个事务清理掉:
+SQL>exec dbms_transaction.purge_lost_db_entry('108.28.46269')
+然后手工插入相关记录:
+SQL>alter system disable distributed recovery;
+SQL> insert into pending_trans$ (
+        LOCAL_TRAN_ID,
+        GLOBAL_TRAN_FMT,
+        GLOBAL_ORACLE_ID,
+        STATE,
+        STATUS,
+        SESSION_VECTOR,
+        RECO_VECTOR,
+        TYPE#,
+        FAIL_TIME,
+        RECO_TIME)
+    values('108.28.46269', 
+        306206,      
+        'XXXXXXX.12345.1.2.3', 
+        'prepared','P',          
+        hextoraw( '00000001' ), 
+        hextoraw( '00000000' ),
+        0, sysdate, sysdate );
+
+SQL>insert into pending_sessions$ 
+    values( '108.28.46269',
+        1, hextoraw('05004F003A1500000104'), 
+        'C', 0, 30258592, '', 
+        146
+      );
+
+SQL>Commit；
+
+然后再次强制提交：
+SQL>commit force '108.28.46249';
+commit compelte.
+
+select a.sql_text, s.osuser, s.username
+from v$transaction t, v$session s, v$sqlarea a where s.taddr = t.addr
+and a.address = s.prev_sql_addr
+and t.xidusn = <first-part-of -transaction-ID>
+and t.xidslot =<second-part-of -transaction-ID>
+and t.xidsqn = <third-part-of -transaction-ID>; 
+For example if your transaction ID in dba_2pc_pending is 1.25.589367, the syntax will be:
+
+select a.sql_text, s.osuser, s.username
+from v$transaction t, v$session s, v$sqlarea a where s.taddr = t.addr
+and a.address = s.prev_sql_addr
+and t.xidusn = 1
+and t.xidslot = 25
+and t.xidsqn = 589367;
+
+select /*+ rule*/   s.osuser, s.username,s.program,s.process,s.machine,s.sql_id,a.sql_text,event,s.status,last_call_et,BLOCKING_SESSION,FINAL_BLOCKING_SESSION
+from v$transaction t, v$session s, v$sqlarea a where s.taddr = t.addr
+and a.address = s.prev_sql_addr
+and (t.xidusn, t.xidslot , t.xidsqn ) in (
+select distinct regexp_substr(LOCAL_TRAN_ID,'[^.]+',1,1) p1,regexp_substr(LOCAL_TRAN_ID,'[^.]+',1,2) p2,regexp_substr(LOCAL_TRAN_ID,'[^.]+',1,3) p3 from dba_2pc_pending);
+214:find session that execute special procedure
+SELECT B.OWNER||B.OBJECT_NAME,A.* FROM v$SESSION A,DBA_OBJECTS B 
+WHERE OBJECT_NAME LIKE 'D10_FIRST_YIELD_0%'AND  PLSQL_ENTRY_OBJECT_ID=OBJECT_ID
+V.1
+declare
+v_sql varchar2(2000):='commit force :b1';
+begin
+for r in (select * from dba_2pc_pending WHERE STATE='prepared' and local_tran_id='1674.17.60348') loop
+       update  sys.pending_trans$ set (GLOBAL_TRAN_FMT,GLOBAL_ORACLE_ID, STATE,STATUS,SESSION_VECTOR,RECO_VECTOR,TYPE#,FAIL_TIME, RECO_TIME)=
+       (select 306206,'XXXXXXX.12345.1.2.3', 'prepared','P', hextoraw( '00000001' ),hextoraw( '00000000' ),0, sysdate, sysdate from dual )
+      where local_tran_id = r.LOCAL_TRAN_ID; 
+      update  sys.pending_sessions$ set(SESSION_ID, BRANCH_ID, INTERFACE, TYPE#, PARENT_DBID, PARENT_DB, DB_USERID)=
+      (select   1, hextoraw('05004F003A1500000104'),'C', 0, 30258592, '', 146  from dual ) 
+      where local_tran_id = r.LOCAL_TRAN_ID; 
+      delete from sys.pending_sub_sessions$ where local_tran_id = r.LOCAL_TRAN_ID; 
+      execute immediate v_sql using r.LOCAL_TRAN_ID;
+end loop;
+end;
+/
+V.2
+declare
+v_sql varchar2(2000):='commit force ';
+begin
+for r in (select * from dba_2pc_pending WHERE STATE='prepared' AND FAIL_TIME>SYSDATE-2) loop
+       update  sys.pending_trans$ set (GLOBAL_TRAN_FMT,GLOBAL_ORACLE_ID, STATE,STATUS,SESSION_VECTOR,RECO_VECTOR,TYPE#,FAIL_TIME, RECO_TIME)=
+       (select 306206,'XXXXXXX.12345.1.2.3', 'prepared','P', hextoraw( '00000001' ),hextoraw( '00000000' ),0, sysdate, sysdate from dual )
+      where local_tran_id = r.LOCAL_TRAN_ID; 
+      update  sys.pending_sessions$ set(SESSION_ID, BRANCH_ID, INTERFACE, TYPE#, PARENT_DBID, PARENT_DB, DB_USERID)=
+      (select   1, hextoraw('05004F003A1500000104'),'C', 0, 30258592, '', 146  from dual ) 
+      where local_tran_id = r.LOCAL_TRAN_ID; 
+      delete from sys.pending_sub_sessions$ where local_tran_id = r.LOCAL_TRAN_ID;
+      execute immediate v_sql||''''||r.LOCAL_TRAN_ID||'''';
+end loop;
+end;
+/
+
+
+
+215:
+http://cache.baiducontent.com/c?m=9f65cb4a8c8507ed4fece76310478a394613dc387a9cc7150889d31bc23a0c564711b2e6783f565e93922f311cac4a5ce0fb337423467df7cdc7c8158ee785285e8d30340159dd1d448e5cee&p=92769a47ca811fff57ee927d4d409c&newp=b439d116d9c11fbc1cbd9b7d0b1591231601d13523808c0a3e83fe4c99674f171c0ba7ec67634b598fca786600ae4f5deefb3470340823b79dca8b41dcafd4456edf653b2740d01f0197&user=baidu&fm=sc&query=RMAN+7+windows&qid=d945ef8b00047ff4&p1=7
+You've gotten some pretty good comment already, but I didn't see any of the previous posters point out a vital detail.
+
+Let's say you specify a recovery window of 7 days. That means rman will not obsolete any backup needed for recovery to any point in the last seven days. Check. But what's the subtle detail?
+
+Suppose you take a full backup on 1 Sep, then start taking incremental backups going forward. Now we're down to 10 Sep which puts that full backup 3 days earlier than the recovery window. However, it is still the most recent full backup and so is needed to recover into any time during the 7 day recovery window. Therefore, it will NOT be marked obsolete.
+
+Think about what this does in the textbook backup routine of a full backup every 7 days, with incremental backups the other 6 days. We take a full backup on day 1. We take incremental backups on days 2 - 7. We take a full backup again on Day 8, and incrementals on days 9 - 14. 
+Day  =  1  2  3  4  5  6  7  8  9 10 11 12 13 14
+Bkup =  F  I  I  I  I  I  I  F  I  I  I  I  I  I
+On day 14, our recovery window reaches back to day 7, and the only way to recover to day 7 is to use the full backup from day 1 and the incrementals from 2 through 7. So even though we have a 7 day recovery window, we actually have 14 days worth of backups that are yet to go obsolete. On day 15, we can obsolete and drop everything prior to the full backup on Day 8.
+216:Moving SPFILE from file system to ASM
+https://emarcel.com/moving-spfile-from-file-system-to-asm-oracle-rac11g/
+217:RDA
+ the Data Recovery Advisor is a new feature. With this advisor, data failures can be automatically diagnosed along with reporting appropriate options for repair. 
+ The advisor can also help reduce the amount of time needed to recover
+ RMAN> list failure;
+ RMAN> advise failure;
+218：SMON
+fast-start on-demand rollback/deferred transaction recovery
+219:ORION
+ORION (Oracle I/O Calibration Tool) 
+是校准用于 Oracle 数据库的存储系统 I/O 性能的独立工具。校准结果对于了解存储系统的性能有很大帮助，不仅可以找出影响 Oracle 数据库性能的问题，还能测量新数据库安装的大小。
+由于 ORION 是一个独立工具，用户不需要创建和运行 Oracle 数据库。
+220:Notice for logmnr archived log in another database with catalog and dictionary information
+    1.All data in archived log are stored with rawdata.We need to convert varchar2 to raw using UTL_RAW.CAST_TO_RAW.
+	2.Search logmnr_contents using condition "like HEXTORAS('':B'')",:B value getting from previous step.
+221:Getting type of mounted directory on linux
+df -lhT    mount -l
+222:Recover crontab contents after delete it using crontab -e
+    1.Find all execute log from normal day that not loss job
+	  tail -100000 /var/log/cron|grep -i "Nov 11" >/tmp/log_cront.log
+	2.Get unique job name after filter repeat executing job
+	  awk -F'(' '/crond/{a[$3]=$0}END{for(i in a)print a[i]}' /tmp/log_cront.log >/tmp/unique_crontab.txt
+	  or
+	  more /tmp/log_cront.log|awk '{print $9}'|sort -u
+	3.Get job execute frequently
+	  more /tmp/log_cront.log|grep -i <job name from previous setp>
+223:Using SecureCRT to upload/download datafile
+    install lrzsz
+	rz---upload  sz-----download
+224:Got table default tablespace in oracle 11G(because maybe exits table default tablespace is different with any partition in this table)
+    If you drop a tablespace than don't have segment_name but maybe table default tablespace assign to it.
+	you can drop it,but when insert into statment let it generate new partition and local on default tablespace which you have drop will report tablespace not exists.
+	We can use below statment to check tablespace is default tablespace or not.
+	login database through sys user:
+	SELECT * FROM (
+    SELECT A.PARTOBJ.DEFTS_NAME TBS,A.OBJ_NUM FROM (
+    SELECT * FROM  ku$_tab_partobj_view ) A) WHERE TBS IN ('D_DMP_RP10_R_UNIT_LOG')
+225:VxVM vxdg ERROR V-5-1-10978:Disk is in use by another host
+vxdg -C import diskgroup
+226:import sql statement contains chinese and '&'(mean is a variable beginning)
+set define off; ---To treate '$' as a normal character
+export LANG=en_US.UTF-8
+export NLS_LANG="TRADITIONAL CHINESE_TAIWAN.AL32UTF8" --NLS_LANG value should be [NLS_LANGUAGE]_[NLS_TERRITORY].[NLS_CHARACTERSET].
+export NLS_LANG=en_US.UTF-8
+227:乐观锁和ORA_ROWSCN
+view report R_PORTAL
+
+228:RMAN
+MAN-12001: could not open channel ORA_DISK_1
+RMAN-10008: could not create channel context
+RMAN-10003: unable to connect to target database
+ORA-01017: invalid username/password; logon denied
+Solution
+~~~~~~~~~
+1) Return this persistent configuration parameter back to the default setting    as follows:
+   RMAN> CONFIGURE CHANNEL 1 DEVICE TYPE DISK CLEAR;
+   of change the configuration to a correct value
+   RMAN> CONFIGURE CHANNEL 1 DEVICE TYPE DISK  connect '<username/password>';
+2) Re-submit the failing operation.
+229:Check temporary tablespace usage detail
+    SELECT * FROM V$SORT_USAGE order by blocks
+	select b.Total_MB,
+       b.Total_MB - round(a.used_blocks*8/1024) Current_Free_MB,
+       round(used_blocks*8/1024)                Current_Used_MB,
+      round(max_used_blocks*8/1024)             Max_used_MB
+from v$sort_segment a,
+ (select round(sum(bytes)/1024/1024) Total_MB from dba_temp_files ) b;
+230:V$sqlarea bind_data value
+SELECT  dbms_sqltune.extract_bind(bind_data, 1),dbms_sqltune.extract_bind(bind_data, 1).value_string  FROM v$SQLAREA WHERE LOWER(SQL_TEXT) LIKE '%delete%ediloadlist%'
+231:UNDO USE STATUS
+select s.sid,s.username,t.used_urec,t.used_ublk
+from v$session s, v$transaction t
+where s.saddr = t.ses_addr
+order by t.used_ublk desc
+232:uninstall oracle
+$ORACLE_HOME/oui/bin/runInstaller
+http://www.dba-oracle.com/t_uninstall_software.htm
+233:巧用close_trace命令释放误删trace文件
+SQL> oradebug setospid 7289;
+Oracle pid: 6, Unix process pid: 7289, image: oracle@rh2 (LGWR)
+SQL> oradebug flush;             /*写出trace buffer内容到trace文件*/
+Statement processed.
+SQL> oradebug close_trace;
+Statement processed.
+/*close_trace能够释放指定Oracle进程正打开着的文件，To close the current trace file use*/
+234:郵件Subject中文亂碼
+        ---First method:http://base64.xpcha.com/ --change this base64 code "57O757Wx6YWN572u" with what you want through http://base64.xpcha.com/ transcoding
+        ---Second method:Using select  utl_raw.cast_to_varchar2(utl_encode.BASE64_ENCODE(utl_raw.cast_to_raw('系統配置'))) from dual  value to replace ”57O757Wx6YWN572u“
+        V_HEAD:='[ ** '||V_SITE_CODE_CNAME||' ** E SYSTEM ]   =?UTF-8?B?57O757Wx6YWN572u?= --- LOG Warnnig(messages,alert,vcs)';   
+235:emctl setpasswd dbconsole
+236:11G ADG automatic repair corrupt data blocks(ABMR自动坏块修复)测试一
+     http://www.anbob.com/archives/2156.html
+237:listagg
+select length(acol) from ( SELECT LISTAGG(year,',,')  WITHIN GROUP (order by year ) acol from (select  '2001' as year from  dual union select  '2002' as year from  dual ))
+SELECT LISTAGG(year,',')  WITHIN GROUP (order by year ) acol from (select  '2001' as year from  dual union select  '2002' as year from  dual )
+238:model 語句
+SELECT  domains,NAME,YEAR,inputs  ,increaments
+     FROM  modeL_test 
+     WHERE domains='chchina'
+      MODEL RETURN UPDATED ROWS
+          PARTITION BY (domains)
+          DIMENSION BY (NAME,YEAR)
+          MEASURES ( inputs,increaments)
+          RULES (
+           inputs['apple',YEAR BETWEEN 2000 AND 2004]=inputs['orange',cv(YEAR)]+600,
+           increaments['apple',YEAR BETWEEN 2000 AND 2004]=increaments['orange',cv(YEAR)]*2);
+239:EPEL
+What is Extra Packages for Enterprise Linux (or EPEL)
+Extra Packages for Enterprise Linux (or EPEL) is a Fedora Special Interest Group that creates, maintains, and manages a high quality set of 
+additional packages for Enterprise Linux, including, but not limited to, Red Hat Enterprise Linux (RHEL), CentOS and Scientific Linux (SL), Oracle Linux (OL).
+240:txt文檔中\n 表示換行  tablespace [^\n]+
+   STORE ((?!REVERSE).)*
+   (pattern)
+匹配pattern并获取这一匹配。所获取的匹配可以从产生的Matches集合得到，在VBScript中使用SubMatches集合，在JScript中则使用$0…$9属性。要匹配圆括号字符，请使用“\(”或“\)”。
+(?:pattern)
+非获取匹配，匹配pattern但不获取匹配结果，不进行存储供以后使用。这在使用或字符“(|)”来组合一个模式的各个部分时很有用。例如“industr(?:y|ies)”就是一个比“industry|industries”更简略的表达式。
+(?=pattern)
+非获取匹配，正向肯定预查，在任何匹配pattern的字符串开始处匹配查找字符串，该匹配不需要获取供以后使用。例如，“Windows(?=95|98|NT|2000)”能匹配“Windows2000”中的“Windows”，但不能匹配“Windows3.1”中的“Windows”。预查不消耗字符，也就是说，在一个匹配发生后，在最后一次匹配之后立即开始下一次匹配的搜索，而不是从包含预查的字符之后开始。
+(?!pattern)
+非获取匹配，正向否定预查，在任何不匹配pattern的字符串开始处匹配查找字符串，该匹配不需要获取供以后使用。例如“Windows(?!95|98|NT|2000)”能匹配“Windows3.1”中的“Windows”，但不能匹配“Windows2000”中的“Windows”。
+(?<=pattern)
+非获取匹配，反向肯定预查，与正向肯定预查类似，只是方向相反。例如，“(?<=95|98|NT|2000)Windows”能匹配“2000Windows”中的“Windows”，但不能匹配“3.1Windows”中的“Windows”。
+(?<!pattern)
+非获取匹配，反向否定预查，与正向否定预查类似，只是方向相反。例如“(?<!95|98|NT|2000)Windows”能匹配“3.1Windows”中的“Windows”，但不能匹配“2000Windows”中的“Windows”。这个地方不正确，有问题
+此处用或任意一项都不能超过2位，如“(?<!95|98|NT|20)Windows正确，“(?<!95|980|NT|20)Windows 报错，若是单独使用则无限制，如(?<!2000)Windows 正确匹配
+241:Recreate AWR
+https://www.jaggy.com/community/message/1241
+卸载awr脚本：$ORACLE_HOME/rdbms/admin/catnoawr.sql
+安装awr脚本：$ORACLE_HOME/rdbms/admin/catawr.sql
+242:
+sqlplus user/pwd@database << END
+set echo off; --命令不回显 
+set feedback off; --不显示已选择行数
+set colsep |; --设置列分割符
+set linesize 2500; --设置每行最大长度（补空格的） 
+set pagesize 0; --设置不分页
+set heading off; --不显示列名
+set term off; --不显示脚本内容
+set trimspool on; --去掉行末的空格，针对spool的文件内容
+set trimout on; --去掉行末的空格，针对屏幕输出
+set numformat 99999999990.99; --设置数字格式，保留两位位小数，小于0时小数点前补零(0.22)
+set sqlnumber off; --sql换行后显示提示符（而不是行号）
+
+spool tmpfilename.txt
+sqlstatement;
+spool off
+
+sed -e 's/ //g' -e '/^SQL>/d' tmpfilename .txt > newfilename.txt
+243:Toad:No app specified for TarActionManager.AddAction
+Title
+"No app specified for TarActionManager.AddAction" error when trying to export DDL
+Resolution
+1) Close Toad for Oracle.
+2) For Windows XP - Go to 'C:\Documents and Settings\<OS_USER>>\Application Data\Quest Software\Toad for Oracle\<Toad Version>\User Files' directory.
+or
+For Windows Vista and 7 - Go to 'C:\Users\<OS USER>\AppData\Roaming\Quest Software\Toad for Oracle\<Toad Version>\User Files' directory.
+(a) Rename the ToadActions.dat file to ToadActions.dat.backup.
+(b) Rename the ToadActions.log to ToadActions.log.backup
+3) Launch Toad and test issue.
+
+If you are still having issue, then repeat steps 1 & 2 above and then do a repair on the application.
+244:Pump abends with incompatible record error randomly when trails are located on Veritas File System (VxFS) 
+The recommendation is to disable caching through mount options on VxFS:
+nodatainlog
+mincache=direct
+convosync=direct 
+245:
+SELECT USERNAME FROM DBA_USERS WHERE REGEXP_INSTR(USERNAME,'^[H|F|SFC_H|SFC_F]+[0-9]+')>0
+246:
+正則運算式中的空格:\s
+247:V$session中的PLSQL_ENTRY_SUBPROGRAM_ID
+SELECT * FROM dba_procedures WHERE OBJECT_NAME='HRM_MONTH_ATTENDANCE_TOTAL_PK' AND OWNER='HRM_ATTENDANCE' ORDER BY SUBPROGRAM_ID
+SELECT * FROM DBA_OBJECTS WHERE OBJECT_ID=V$SESSION.PLSQL_ENTRY_OBJECT_ID
+248:Display mount disk attributes
+mount -v
+249:linux / 滿的情況
+1.刪除現有進程持有的文件后,進程未釋放文件,KILL進程
+  login as root: lsof|grep -i del  ----check exist deleted file but not release file.kill it if exits(check process can be kill or not)
+2.ORACLE啟用追蹤,將追蹤文件放在/文件夾下導致/使用量增長過快
+  $ORACLE_HOME/network/admin/sqlnet.ora 屏蔽相關追蹤參數
+250:
+重建DBLINK時,刪除DBLINK后調用DBLINK的過程不會失效.只有執行的時候會失效
+251:Compile
+select    'ALTER '||CASE WHEN TYPE='PACKAGE BODY' THEN 'PACKAGE ' ELSE TYPE END||' '||A.OWNER||'.'||A.NAME||' COMPILE;' from DBA_DEPENDENCIES A,DBA_OBJECTS B
+WHERE REFERENCED_NAME='R_WO' AND REFERENCED_OWNER='GBCDMP2_DMP2WEB' AND A.OWNER=B.OWNER AND A.NAME=B.OBJECT_NAME AND A.TYPE=B.OBJECT_TYPE AND B.STATUS='VALID'
+252:
+SCHEMA have all privileges on tables in his schema.so can DML on tables in procedure in his owner when revoke by another user whc don't have privilge on those tables.
+253:vxdisk format disk
+echo "- - -" > /sys/class/scsi_host/host0/scan
+echo "- - -" > /sys/class/scsi_host/host2/scan
+
+vxdisksetup -i 3pardata0_12
+vxdg init archdg arch=3pardata0_12
+vxassist -g archdg -p maxsize layout=nostripe alloc=arch
+vxassist -g archdg make archvol 1174292480s layout=nostripe alloc=arch
+mkfs -t vxfs /dev/vx/dsk/archdg/archvol
+mount -t vxfs /dev/vx/dsk/archdg/archvol /archlog
+254:ORACLE数据库汉字占几个字节问题
+一：因为ORACLE数据库它可以存储字节或字符，例如 CHAR(12 BYTE) CHAR(12 CHAR)的意义是不同的.一般来说默认是存储字节，你可以查看数据库参数NLS_LENGTH_SEMANTICS的值。 
+如果定义为VARCHAR2(50 CHAR),那么该列最多就可以存储50个汉字，如果定义字段为VARCHAR2（50） 或VARCHAR2（50 BYTE）那么它最多可以存储多少个汉字就要视数据库字符集编码决定
+二：ORACLE数据库汉字占用几个字节，要根据ORACLE中字符集编码决定，一般情况下，数据库的NLS_CHARACTERSET 为AL32UTF8或UTF8，即一个汉字占用三到四个字节。如果NLS_CHARACTERSET为ZHS16GBK，则一个字符占用两个字节.
+至于具体情况，可以通过LENGTHB或者VSIZE函数求得是占用字节数。
+SELECT  LENGTHB('您好'),LENGTH('您好'),VSIZE('您好')   FROM DUAL;
+255:
+du -h /var/spool/clientmqueue
+find ./ -mtime +10 -name "df*" -exec rm -rf {} \;
+256:匯出數據庫DBLINK
+expdp '"/ as sysdba"' directory=HISTIMP dumpfile=dblink_test.dmp full=y INCLUDE=DB_LINK content=metadata_only
+257:linux 默認profile
+/ect/profile
+257:目標段查看有那些IP連接到本機(處理OGG延時時不知道源端IP時用此方法查詢源端IP)
+ lsof |grep -i "10.251"|more
+ 
+ lsof |grep -i r5001837|grep -i server (target trail file)
+ output:
+ server    21459    oracle    7uW     REG         252,221185  158974835               208067 /oggdata/mlb/ogg/glsfc-csd1/r5001837
+ lsof|grep  21459(PID)
+ 通过如上命令可以找到IP
+ 
+ lsof|grep -i  "TCP new-zzdw21"|grep -i server  new-zzdw21:為主機名
+258:
+$sqlplus '/ as sysdba'
+oradebug setmypid
+oradebug unlimit
+oradebug dump systemstate 266
+alter session set max_dump_file_size=unlimited;
+alter session set events 'immediate trace name systemstate level 10'
+
+259:GOUPY BY 替換
+1比2好
+1.SELECT a.ROWID,
+       a.wip_no,
+       (SELECT MIN (input_time)
+          FROM (SELECT no, input_time FROM gldmp2_dmpdb2.r_wip
+                UNION ALL
+                SELECT no, input_time FROM gldmp4_dmpdb2.r_wip)
+         WHERE a.wip_no = no)
+          AS first_input_time
+  FROM (SELECT a.ROWID, wip_no
+          FROM glsummary_dmp2web.lock_wip_info_t a
+         WHERE     a.category_key LIKE 'D2%'
+               AND a.opm_lock_flag = 1
+               AND a.lock_date >= :v_start_date
+               AND a.lock_date < :v_end_date) a
+               
+
+
+
+2.SELECT /*+ leading(a)*/  wip_no, MIN (input_time) 
+FROM glsummary_dmp2web.lock_wip_info_t a, 
+(SELECT no, input_time FROM gldmp2_dmpdb2.r_wip 
+UNION ALL 
+SELECT no, input_time FROM gldmp4_dmpdb2.r_wip) b 
+WHERE a.wip_no = b.no 
+AND a.category_key LIKE 'D2%' 
+AND a.opm_lock_flag = 1 
+AND a.lock_date >=:v_start_date
+AND a.lock_date < :v_end_date 
+GROUP BY wip_no
