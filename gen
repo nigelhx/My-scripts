@@ -283,3 +283,56 @@ SELECT DISTINCT 'ALTER '||REPLACE(TYPE,'PACKAGE BODY','PACKAGE')||' '||OWNER||'.
 SELECT * FROM   DBA_DEPENDENCIES 
 start with (OWNER,NAME) IN (SELECT DISTINCT OWNER,OBJECT_NAME FROM DBA_OBJECTS WHERE REFERENCED_OWNER IN ('DMPDB2') AND  REFERENCED_NAME='R_WIP') 
                          CONNECT BY NOCYCLE PRIOR  NAME=REFERENCED_NAME  AND    REFERENCED_TYPE IN ('FUNCTION','PACKAGE','PROCEDURE','PACKAGE BODY','VIEW') ) ;
+
+
+create table ZBCMLB2_MLBII_TO_NEW2 as 
+select partitioned,table_name from dba_tables  where owner='ZBCMLB2_MLBII' and table_name in (SELECT table_name FROM ZBCMLB2_MLBII_TO_NEW)
+
+DECLARE
+-------THE HIGH VALUE FORMAT  IS TO_DATE(' 2014-01-01 00:00:00', 'SYYYY-MM-DD HH24:MI:SS', 'NLS_CALENDAR=GREGORIAN') AND CONSTRANT SUBSTR WORD 11 BETWEEN 19,
+-------IF HIGH VALUE FORMAT IS CHANGE,PLEASE CHANGE to_date(substr(HIGH_VALUE,11,19),'yyyy/mm/dd hh24:mi:ss')  to current value
+-------------V_BEGIN_TIME format AS 'YYYYMM',Becareful becasue partition table use under specific time,so if you want to import 201503 month data,you should set this value 201506
+-------------V_END_TIME  format AS 'YYYYMM',Becareful becasue partition table use under specific time,so if you want to import 201512 month data,you should set this value 201601
+V_OWNER      VARCHAR2(200):='ZBCMLB2_MLBII';   
+V_SEG_NAME        VARCHAR2(200);
+V_BEGIN_TIME  VARCHAR2(200):='201708'; 
+V_END_TIME     VARCHAR2(200):='201710'; 
+V_TAB          VARCHAR2(200);
+BEGIN
+FOR T_TAB IN (select * from ZBCMLB2_MLBII_TO_NEW2 where PARTITIONED='YES') LOOP
+     V_SEG_NAME:=T_TAB.table_name;
+     V_TAB:='SELECT * FROM DBA_TAB_PARTITIONS WHERE TABLE_OWNER='''||V_OWNER||''' AND TABLE_NAME='''||V_SEG_NAME||'''';
+     FOR R IN (
+     select EXPDP_SQL,OWNER,SEGMENT_NAME,PARTITION_NAME from (
+     SELECT 'expdp f3602914/f3602914 directory=HXDIR dumpfile='||a.owner||'_'||a.segment_name||'_'||a.partition_name||'_%U.dmp filesize=30G tables='||a.owner||'.'||a.segment_name||':'||a.partition_name
+     ||' CONTENT=DATA_ONLY '|| CASE WHEN V_SIZE<=20 THEN '' WHEN V_SIZE BETWEEN 20 AND 40 THEN  'PARALLEL=3'  WHEN V_SIZE BETWEEN 40 AND 60 THEN 'PARALLEL=4' 
+     WHEN V_SIZE BETWEEN 60 AND 80 THEN 'PARALLEL=5' 
+     ELSE  'PARALLEL=6'   END 
+     || ' compression=ALL '
+     ||' logfile='||a.owner||'_'||a.segment_name||'_'||a.partition_name||'.log' EXPDP_SQL,a.*,v_size
+     FROM (select * from (
+     WITH xml AS (
+              SELECT XMLTYPE(
+                        DBMS_XMLGEN.GETXML(V_TAB)
+                        ) AS xml
+              FROM   dual
+              )
+      ,    parsed_xml AS (         
+              SELECT     extractValue(xs.object_value, '/ROW/TABLE_OWNER')       AS owner
+              ,      extractValue(xs.object_value, '/ROW/TABLE_NAME')       AS segment_name
+              ,      extractValue(xs.object_value, '/ROW/PARTITION_NAME')      AS PARTITION_NAME
+              ,      extractValue(xs.object_value, '/ROW/HIGH_VALUE')  AS HIGH_VALUE
+              FROM   xml x
+              ,      TABLE(XMLSEQUENCE(EXTRACT(x.xml, '/ROWSET/ROW'))) xs
+              )
+      SELECT OWNER,SEGMENT_NAME,PARTITION_NAME,to_date(substr(HIGH_VALUE,11,19),'yyyy/mm/dd hh24:mi:ss') v_date,HIGH_VALUE
+      FROM   parsed_xml WHERE OWNER=V_OWNER)
+      where   v_date BETWEEN TO_DATE(V_BEGIN_TIME,'YYYY/MM')  AND TO_DATE(V_END_TIME,'YYYY/MM')
+     ) a,(select * from (SELECT OWNER,SEGMENT_NAME,PARTITION_NAME,SUM(BYTES)/1024/1024/1024 V_SIZE,substr(partition_name,-6,6) V_FORMAT_TIME FROM DBA_SEGMENTS 
+     WHERE OWNER=V_OWNER AND SEGMENT_NAME=V_SEG_NAME GROUP BY OWNER,SEGMENT_NAME,PARTITION_NAME order by substr(partition_name,-6,6) asc)
+     ) b where a.owner=b.owner and a.segment_name=b.segment_name and a.partition_name=b.partition_name)
+     ) LOOP
+        DBMS_OUTPUT.PUT_LINE(R.EXPDP_SQL);
+     end loop;
+END LOOP;
+END;/
