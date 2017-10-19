@@ -1,0 +1,72 @@
+
+sga:44<hugepage:45<memory_lock:46<shmmax:47<shmall:96
+
+pga:40 sga:128  hugepage:128.5  shmmax:129   memlock:169  shmall:172
+pga:50 sga:150  hugepage:150.5  shmmax:151   memlock:201  shmall:203
+http://www.juliandyke.com/Internals/Internals.php
+
+1.機房溫濕度標準:
+  溫度:18-25度  濕度:40%--60%(最好在50%--55% HP建議)
+  機櫃(2米高)和風炮距離地面（2.4米).
+  防靜電地板  60*60
+
+2.主機相關
+  1.Firmware升級(建議升級到比最新版本低1到2個版本,一般不要升級到最新已避免最新BUG.)
+  2.網卡驅動升級(建議升級到比最新版本低1到2個版本,一般不要升級到最新已避免最新BUG.)
+  3.時間同步設置
+  4.屏蔽硬碟自檢(本機,tune2fs -l檢查(MAXCOUNT -1,INTERVAL TIME 0),tune2fs -c -1 -i -0 /dev/disk_name設置)
+  5.nproc,nofile設置為ulimited(Linux)
+  6.設置合適的shmmax,shmmall和huge page大小.
+  7.系統版本選擇.
+  8.獨立網卡和集成網卡搭配.
+  9.OSW或sar系統監控部署.
+  10.關閉集成網卡,ASR開啟(安裝HP ASM相關包),電源改為非省電模式
+  ASR(Automatic Server Recovery)是一个硬件部件,它能检查一些严重的服务器关键事件和一些重要零部件是否异常
+  (如内存错误,磁盘故障,温度过高,电源掉电,风扇故障,网卡异常等)HP asm驱动与操作系统相关,它负责检测软故障（如系统挂起,程序hang等)
+  ASR和ASM时时保持联系,缺少任何一方那么ASR和ASM都失效.ASR和ASM类似于服务器的维护人员,一个负责硬件层,一个负责软件层,同时他们之间时时保持联系,
+  当出现问题时,共同协商采取某种动作,如重启机器等,
+  HP官方强烈建议用户开启ASR该功能并相应装上ASM驱动（采用smartstart部署系统或安装PSP包会自动安装该驱动）,
+  否则机器可能在故障存在的情况下继续跑应用，这时数据安全难以保障。
+  11.OSW配置
+  12.相關監控部署(ZABBIX)
+
+3.數據庫相關
+  1.數據庫版本的選擇
+  2.PATCH的選擇
+  3.合適的db_files
+  4.合適的字符集.
+  5.Huge page
+  6.相關參數設置
+    redo log---根据实际情况增加redo log
+    temp---根据实际情况增加temp
+    undo---根据实际情况增加temp
+    processes---根据实际情况增加temp
+    spfile--根据实际情况增加参数
+	11G用户登陆bug
+    *.event='28401 TRACE NAME CONTEXT FOREVER, LEVEL 1'             ------------用戶密碼錯誤導致觸發密碼延遲,導致數據庫產生大量library cache lock
+    *._undo_autotune=FALSE
+    *._b_tree_bitmap_plans=FALSE
+    *.optimizer_capture_sql_plan_baselines=FALSE
+    *.optimizer_index_caching=90
+    *.optimizer_index_cost_adj=25
+    *.recyclebin='OFF'
+    *.sec_case_sensitive_logon=FALSE
+    *.session_cached_cursors=300
+    *.undo_management='AUTO'
+    ALTER SYSTEM SET _kgl_hot_object_copies=5 SCOPE=SPFILE;
+    ALTER SYSTEM SET "_cursor_obsolete_threshold"=100 SCOPE=SPFILE;
+    ALTER SYSTEM SET _resource_manager_always_on=FALSE SCOPE=SPFILE;
+  7.啟動日誌追加 
+    ALTER DATABASE ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+  8.oracle 10G 11G相關JOB禁用,(11G 禁用相關的AUTO TASK,WINDOWS)
+  
+1.how to let changed limited.config  availiable.
+Reboot works, but that's an overkill. Why not log out and log back in?
+If it's Oracle that's already running, you need to shutdown Oracle.
+2.How to let  changed sysctl.config availiable
+sysctl -p
+
+
+4.平時遇到的問題記錄成冊
+
+
